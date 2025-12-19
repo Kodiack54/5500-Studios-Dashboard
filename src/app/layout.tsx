@@ -49,10 +49,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
-        <title>Dev Command - NextBid</title>
-        <meta name="description" content="NextBid Control Center for Development Team" />
-        <link rel="icon" href="/images/nextbid-logo.png" />
-        <link rel="apple-touch-icon" href="/images/nextbid-logo.png" />
+        <title>Kodiack Dashboard</title>
+        <meta name="description" content="Kodiack Studios Control Center" />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/favicon.ico" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <UserProvider>

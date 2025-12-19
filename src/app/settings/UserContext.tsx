@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import Cookies from 'js-cookie';
+import { getUser as getDevUser, isLoggedIn, redirectToLogin } from '@/lib/auth-client';
 
 // Product IDs that can be assigned to users
 export type ProductId = 'tradelines' | 'sources' | 'nextbidder' | 'portals' | 'nexttech' | 'nexttask' | 'dev-environment';
@@ -148,22 +149,42 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function loadUser() {
       try {
-        // Read Gateway JWT from cookie
+        // Check if logged in via auth-7000
+        if (!isLoggedIn()) {
+          console.log('Not logged in, redirecting to auth-7000');
+          redirectToLogin();
+          return;
+        }
+
+        // First try to get user from dev_user cookie (set by auth-7000)
+        const devUserCookie = getDevUser();
+        if (devUserCookie) {
+          // Map auth-7000 role to our UserRole type
+          const roleName = (devUserCookie.role || 'developer').toLowerCase();
+          const validRoles: UserRole[] = ['superadmin', 'admin', 'lead', 'engineer', 'developer', 'support'];
+          const role: UserRole = validRoles.includes(roleName as UserRole)
+            ? (roleName as UserRole)
+            : 'developer';
+
+          setUser({
+            id: devUserCookie.id,
+            name: devUserCookie.name,
+            email: devUserCookie.email,
+            role,
+            assignedProjects: ALL_PRODUCTS, // Default to all for now
+            teamIds: [],
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        // Fall back to reading Gateway JWT from cookie
         const accessToken = Cookies.get('accessToken');
 
         if (!accessToken) {
-          // Not logged in via Gateway - use mock for development
-          console.log('No Gateway JWT found, using mock user');
-          const mockUser: User = {
-            id: 'dev-user-1',
-            name: 'Dev Admin',
-            email: 'admin@nextbid.com',
-            role: 'superadmin',
-            assignedProjects: ALL_PRODUCTS,
-            teamIds: ['dev-team'],
-          };
-          setUser(mockUser);
-          setIsLoading(false);
+          // Not logged in - redirect to auth
+          console.log('No access token found, redirecting to login');
+          redirectToLogin();
           return;
         }
 
@@ -234,15 +255,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         });
       } catch (err) {
         console.error('Error loading user:', err);
-        // Fallback to mock admin for development
-        setUser({
-          id: 'dev-user-1',
-          name: 'Dev Admin',
-          email: 'admin@nextbid.com',
-          role: 'superadmin',
-          assignedProjects: ALL_PRODUCTS,
-          teamIds: [],
-        });
+        // Redirect to login on error
+        redirectToLogin();
       } finally {
         setIsLoading(false);
       }

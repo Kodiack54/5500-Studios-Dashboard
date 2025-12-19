@@ -1,32 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { logout } from '@/lib/auth-client'
 
 export default function LogoutButton() {
-  const router = useRouter()
   const [showConfirm, setShowConfirm] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  async function handleLogout() {
+  function handleLogout() {
     setIsLoggingOut(true)
-
-    try {
-      // Sign out from Supabase
-      await supabase.auth.signOut()
-
-      // Clear any local storage items
-      localStorage.removeItem('selectedCompanyId')
-
-      // Redirect to login page (gateway handles auth)
-      router.push('/login')
-    } catch (error) {
-      console.error('Error logging out:', error)
-      // Still try to redirect even if there's an error
-      router.push('/login')
-    }
+    // Clear local storage and redirect to auth-7000 logout
+    localStorage.removeItem('selectedCompanyId')
+    logout()
   }
 
   return (
@@ -61,7 +47,7 @@ export default function LogoutButton() {
             </div>
 
             <p className="text-gray-300 mb-6">
-              Are you sure you want to log out of the Dev Command Center? Any unsaved changes will be lost.
+              Are you sure you want to log out of Kodiack Dashboard? Any unsaved changes will be lost.
             </p>
 
             <div className="flex items-center justify-end gap-3">
