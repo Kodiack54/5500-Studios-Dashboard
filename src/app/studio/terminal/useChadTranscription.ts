@@ -1,9 +1,9 @@
 // Chad transcription hook - connects to Chad for session logging
 
 import { useRef, useCallback } from 'react';
-import { CHAD_WS_URL } from './constants';
+import { DEV_DROPLET } from './constants';
 
-export function useChadTranscription(projectPath: string, userId?: string) {
+export function useChadTranscription(projectPath: string, userId?: string, chadPort: number = 5401) {
   const chadWsRef = useRef<WebSocket | null>(null);
   const chadSessionIdRef = useRef<string | null>(null);
 
@@ -14,8 +14,12 @@ export function useChadTranscription(projectPath: string, userId?: string) {
     }
 
     try {
+      // Chad port is terminal port + 1 (e.g., 5410 → 5411, 5420 → 5421)
+      const chadWsUrl = `ws://${DEV_DROPLET}:${chadPort}/ws`;
+      console.log('[ClaudeTerminal] Connecting to Chad at:', chadWsUrl);
+
       const chadWs = new WebSocket(
-        `${CHAD_WS_URL}?project=${encodeURIComponent(projectPath)}&userId=${userId}`
+        `${chadWsUrl}?project=${encodeURIComponent(projectPath)}&userId=${userId}`
       );
 
       chadWs.onopen = () => {
@@ -45,7 +49,7 @@ export function useChadTranscription(projectPath: string, userId?: string) {
     } catch (err) {
       console.log('[ClaudeTerminal] Could not connect to Chad:', err);
     }
-  }, [projectPath, userId]);
+  }, [projectPath, userId, chadPort]);
 
   const sendToChad = useCallback((data: string) => {
     if (chadWsRef.current?.readyState === WebSocket.OPEN) {

@@ -54,11 +54,13 @@ export function ClaudeTerminal({
     reset: resetSusan,
   } = useSusanBriefing(projectPath);
 
+  // Chad port is terminal port + 1 (e.g., 5410 → 5411)
+  const chadPort = port + 1;
   const {
     connectToChad,
     sendToChad,
     disconnect: disconnectChad,
-  } = useChadTranscription(projectPath, user?.id);
+  } = useChadTranscription(projectPath, user?.id, chadPort);
 
   const briefingSentToClaudeRef = useRef<boolean>(false);
   const claudeCodeLoadedRef = useRef<boolean>(false);
