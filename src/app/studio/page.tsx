@@ -1,13 +1,16 @@
 'use client';
 
 /**
- * Studio Page - Basic Structure
- * Will bring over components from dev-studio-5000 piece by piece
+ * Studio Page - Development Environment
+ * Includes browser preview with project/environment selection
  */
 
 import { useState, useEffect, useContext } from 'react';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
 import { DraggableSidebar, SidebarItem } from './components';
+import BrowserPage from './browser/BrowserPage';
+import type { Project, Environment } from '@/types';
+import { ENVIRONMENTS } from '@/types';
 
 // Sidebar items - same as dev-studio-5000
 const SIDEBAR_ITEMS: SidebarItem[] = [
@@ -27,18 +30,87 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
 export default function StudioPage() {
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
-  const [activePanel, setActivePanel] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<string | null>('browser');
+
+  // Project and environment state
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedEnv, setSelectedEnv] = useState<Environment>(ENVIRONMENTS[0]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+
+  // Fetch projects on mount
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        const res = await fetch('/api/projects');
+        const data = await res.json();
+        if (data.success && data.projects) {
+          setProjects(data.projects);
+          // Auto-select first project
+          if (data.projects.length > 0) {
+            setSelectedProject(data.projects[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+      } finally {
+        setIsLoadingProjects(false);
+      }
+    }
+    fetchProjects();
+  }, []);
 
   useEffect(() => {
     setPageTitle({
       title: 'Studio',
       description: 'Development environment with Claude AI'
     });
+
+    // Add project/environment selectors as page actions
+    setPageActions(
+      <div className="flex items-center gap-2">
+        {/* Project Dropdown */}
+        <select
+          value={selectedProject?.id || ''}
+          onChange={(e) => {
+            const project = projects.find(p => p.id === e.target.value);
+            setSelectedProject(project || null);
+          }}
+          className="bg-black/20 text-white text-sm px-3 py-1.5 rounded-lg border border-black/30 focus:outline-none focus:ring-2 focus:ring-white/30"
+          disabled={isLoadingProjects}
+        >
+          {isLoadingProjects ? (
+            <option>Loading...</option>
+          ) : projects.length === 0 ? (
+            <option>No projects</option>
+          ) : (
+            projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))
+          )}
+        </select>
+
+        {/* Environment Dropdown */}
+        <select
+          value={selectedEnv.id}
+          onChange={(e) => {
+            const env = ENVIRONMENTS.find(env => env.id === e.target.value);
+            if (env) setSelectedEnv(env);
+          }}
+          className="bg-black/20 text-white text-sm px-3 py-1.5 rounded-lg border border-black/30 focus:outline-none focus:ring-2 focus:ring-white/30"
+        >
+          {ENVIRONMENTS.map(env => (
+            <option key={env.id} value={env.id}>{env.name}</option>
+          ))}
+        </select>
+      </div>
+    );
+
     return () => {
       setPageTitle({ title: '', description: '' });
       setPageActions(null);
     };
-  }, [setPageTitle, setPageActions]);
+  }, [setPageTitle, setPageActions, projects, selectedProject, selectedEnv, isLoadingProjects]);
 
   return (
     <div className="h-full flex bg-gray-900">
@@ -53,11 +125,18 @@ export default function StudioPage() {
 
       {/* Main Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left: Main content area (browser/panels will go here) */}
-        <div className="flex-1 flex items-center justify-center border-r border-gray-700">
-          <div className="text-gray-600 text-sm">
-            Main content area - will import BrowserPage from dev-studio-5000
-          </div>
+        {/* Left: Browser/Panel content area */}
+        <div className="flex-1 flex flex-col border-r border-gray-700">
+          {activePanel === 'browser' ? (
+            <BrowserPage
+              project={selectedProject}
+              env={selectedEnv}
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
+              {activePanel ? `${activePanel} panel - coming soon` : 'Select a panel from the sidebar'}
+            </div>
+          )}
         </div>
 
         {/* Right: Claude Terminal area */}
