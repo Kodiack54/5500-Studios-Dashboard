@@ -3,7 +3,7 @@
 import { useState, useContext, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, DoorOpen, Monitor, Users, Wrench, LayoutGrid, Zap, ArrowLeft, Server } from 'lucide-react';
+import { ChevronDown, ChevronRight, DoorOpen, Monitor, Users, Wrench, LayoutGrid, Zap, ArrowLeft, Server, Plug, PlugZap } from 'lucide-react';
 import TimeClockDropdown from './TimeClockDropdown';
 import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
@@ -11,7 +11,6 @@ import AITeamChat from './AITeamChat';
 import { ProductionStatusContext } from '@/app/layout';
 import { useDeveloper, DEVELOPER_TEAMS } from '@/app/contexts/DeveloperContext';
 import { useUser } from '@/app/settings/UserContext';
-import { Plug, PlugZap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // Project definitions for the switcher
