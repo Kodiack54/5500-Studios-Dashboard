@@ -237,7 +237,7 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
                       {activeTab === 'dev-tools' && 'Development Tools'}
                       {activeTab === 'helpdesk' && 'Support Center'}
                       {activeTab === 'calendar' && 'Team Schedule'}
-                      {activeTab === 'development' && 'Development Environment'}
+                      {activeTab === 'studio' && 'Development Environment'}
                     </>
                   )}
                 </h1>
