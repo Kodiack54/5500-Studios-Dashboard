@@ -55,6 +55,13 @@ export default function SettingsDropdown({ user }: SettingsDropdownProps) {
         { label: 'Database', path: '/settings/database', description: 'Supabase connection', permission: 'canManageSystem' },
       ]
     },
+    clients: {
+      title: '🏢 CLIENTS',
+      items: [
+        { label: 'Add Client', path: '/settings/clients/new', description: 'Create new dev_client', permission: 'canManageClients' },
+        { label: 'Manage Clients', path: '/settings/clients', description: 'View & edit clients', permission: 'canManageClients' },
+      ]
+    },
   }
 
   // Close dropdown when clicking outside
@@ -156,6 +163,23 @@ export default function SettingsDropdown({ user }: SettingsDropdownProps) {
                     <p className="text-xs text-gray-500 uppercase font-bold mb-2">{visibleSections.system.title}</p>
                     <div className="space-y-1">
                       {visibleSections.system.items.map((item) => (
+                        <button
+                          key={item.path}
+                          onClick={() => { router.push(item.path); setShowMenu(false); }}
+                          className="w-full px-3 py-2 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-all rounded-lg"
+                        >
+                          <p className="font-medium text-sm">{item.label}</p>
+                          <p className="text-xs text-gray-500">{item.description}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {visibleSections.clients && (
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-2">{visibleSections.clients.title}</p>
+                    <div className="space-y-1">
+                      {visibleSections.clients.items.map((item) => (
                         <button
                           key={item.path}
                           onClick={() => { router.push(item.path); setShowMenu(false); }}

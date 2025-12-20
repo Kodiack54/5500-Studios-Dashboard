@@ -38,7 +38,7 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
     { id: 'dev-tools', label: 'Dev Tools', path: '/dev-controls' },
     { id: 'helpdesk', label: 'HelpDesk', path: '/helpdesk' },
     { id: 'calendar', label: 'Calendar', path: '/calendar' },
-    { id: 'development', label: 'Development', path: '/development' },
+    { id: 'development', label: 'Development', path: 'http://161.35.229.220:5000', external: true },
   ];
 
   const getActiveTab = () => {
@@ -106,13 +106,13 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
               {/* Logo - links to Dashboard (Universal Dashboard) */}
               <Link href="/dashboard" className="flex items-center space-x-3 py-1 hover:opacity-80 transition-opacity">
                 <img
-                  src="/images/nextbid-logo.png"
-                  alt="NextBid"
-                  className="h-[70px] w-auto rounded border-2 border-white/50"
+                  src="/images/kodiack-logo.png"
+                  alt="Kodiack Studio"
+                  className="h-[70px] w-auto rounded"
                 />
                 <div>
-                  <div className="text-white font-bold text-xl leading-tight">Dev Command</div>
-                  <div className="text-gray-400 text-xs leading-tight">NextBid Control Center</div>
+                  <div className="text-white font-bold text-xl leading-tight">Kodiack Studio</div>
+                  <div className="text-gray-400 text-xs leading-tight">Games. Platforms. Systems.</div>
                 </div>
               </Link>
 
@@ -120,15 +120,30 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
               <div className="hidden md:flex items-end space-x-1 ml-4 pb-0">
                 {tabs.map(tab => {
                   const isActive = activeTab === tab.id;
+                  const isExternal = 'external' in tab && tab.external;
+                  const tabClass = `w-32 py-1.5 rounded-t-xl text-base font-medium transition-all border-t border-x flex items-center justify-center ${
+                    isActive
+                      ? 'bg-blue-600 text-white border-blue-500 shadow-lg'
+                      : 'text-gray-300 hover:bg-gray-700 hover:text-white border-gray-600'
+                  }`;
+
+                  if (isExternal) {
+                    return (
+                      <a
+                        key={tab.id}
+                        href={tab.path}
+                        className={tabClass}
+                      >
+                        {tab.label}
+                      </a>
+                    );
+                  }
+
                   return (
                     <Link
                       key={tab.id}
                       href={tab.path}
-                      className={`w-32 py-1.5 rounded-t-xl text-base font-medium transition-all border-t border-x flex items-center justify-center ${
-                        isActive
-                          ? 'bg-blue-600 text-white border-blue-500 shadow-lg'
-                          : 'text-gray-300 hover:bg-gray-700 hover:text-white border-gray-600'
-                      }`}
+                      className={tabClass}
                     >
                       {tab.label}
                     </Link>
