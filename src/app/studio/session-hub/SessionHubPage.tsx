@@ -5,7 +5,16 @@ import { RefreshCw, AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-re
 import { usePipelineStatus } from './hooks/usePipelineStatus';
 import type { BucketCounts, PipelineHealth } from './types';
 
-export default function SessionHubPage() {
+interface SessionHubPageProps {
+  // If provided, show only this team's data. If null/undefined, show global (all teams)
+  teamBasePort?: number; // e.g., 5410 for Dev 1, 5420 for Dev 2, 5430 for Dev 3
+  isGlobal?: boolean; // If true, show all 3 dev teams
+}
+
+export default function SessionHubPage({ teamBasePort, isGlobal = false }: SessionHubPageProps) {
+  // Chad port is base port + 1 (e.g., 5410 → 5411)
+  const chadPort = teamBasePort ? teamBasePort + 1 : undefined;
+
   const {
     chadStatus,
     jenStatus,
@@ -19,7 +28,7 @@ export default function SessionHubPage() {
     loading,
     triggerWorker,
     refreshAll,
-  } = usePipelineStatus();
+  } = usePipelineStatus({ chadPort, isGlobal });
 
   return (
     <div className="h-full flex flex-col bg-gray-900 text-white overflow-auto">

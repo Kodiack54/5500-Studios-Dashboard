@@ -51,7 +51,22 @@ const defaultSusanStatus: SusanStatus = {
 // Dynamic buckets - starts empty, populated from Susan
 const defaultBuckets: BucketCounts = {};
 
-export function usePipelineStatus() {
+interface UsePipelineStatusOptions {
+  chadPort?: number; // Specific Chad port (e.g., 5411 for Dev 1)
+  isGlobal?: boolean; // If true, fetch from all 3 Chads
+}
+
+export function usePipelineStatus(options: UsePipelineStatusOptions = {}) {
+  const { chadPort, isGlobal = false } = options;
+
+  // Determine which Chad URL(s) to use
+  const getChadUrl = () => {
+    if (chadPort) {
+      return `http://${DEV_DROPLET}:${chadPort}`;
+    }
+    return CHAD_URL; // Default global Chad at 5401
+  };
+  const activeChadUrl = getChadUrl();
   const [chadStatus, setChadStatus] = useState<ChadStatus>(defaultChadStatus);
   const [jenStatus, setJenStatus] = useState<JenStatus>(defaultJenStatus);
   const [susanStatus, setSusanStatus] = useState<SusanStatus>(defaultSusanStatus);
@@ -75,7 +90,7 @@ export function usePipelineStatus() {
   // Fetch Chad status
   const fetchChadStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${CHAD_URL}/api/status`, { cache: 'no-store' });
+      const res = await fetch(`${activeChadUrl}/api/status`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
@@ -96,7 +111,7 @@ export function usePipelineStatus() {
         isRunning: false,
       }));
     }
-  }, []);
+  }, [activeChadUrl]);
 
   // Fetch Jen status
   const fetchJenStatus = useCallback(async () => {
@@ -189,7 +204,7 @@ export function usePipelineStatus() {
   // Fetch recent sessions from Chad
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await fetch(`${CHAD_URL}/api/sessions/recent`, { cache: 'no-store' });
+      const res = await fetch(`${activeChadUrl}/api/sessions/recent`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
@@ -199,7 +214,7 @@ export function usePipelineStatus() {
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
     }
-  }, []);
+  }, [activeChadUrl]);
 
   // Calculate pipeline health
   const calculateHealth = useCallback(() => {

@@ -141,7 +141,7 @@ export default function StudioPage() {
               env={selectedEnv}
             />
           ) : activePanel === 'hub' ? (
-            <SessionHubPage />
+            <SessionHubPage teamBasePort={selectedTeam.basePort} />
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
               {activePanel ? `${activePanel} panel - coming soon` : 'Select a panel from the sidebar'}
