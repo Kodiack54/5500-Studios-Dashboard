@@ -227,7 +227,7 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
               </button>
 
               {/* Page Title & Description */}
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0">
                 <h1 className="text-xl font-bold text-white leading-tight">
                   {pageTitle?.title || (
                     <>
@@ -246,12 +246,15 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
                 )}
               </div>
 
-              {/* Page Actions (right side) */}
+              {/* Page Actions (next to title) */}
               {pageActions && (
                 <div className="flex items-center space-x-2">
                   {pageActions}
                 </div>
               )}
+
+              {/* Spacer to push credentials tabs right */}
+              <div className="flex-1" />
             </div>
 
             {/* Right: Credentials Tabs (only on /credentials pages) */}

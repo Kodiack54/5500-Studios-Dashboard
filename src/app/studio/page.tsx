@@ -76,7 +76,7 @@ export default function StudioPage() {
             const project = projects.find(p => p.id === e.target.value);
             setSelectedProject(project || null);
           }}
-          className="bg-black/20 text-white text-sm px-3 py-1.5 rounded-lg border border-black/30 focus:outline-none focus:ring-2 focus:ring-white/30"
+          className="w-44 bg-gray-800/80 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/30"
           disabled={isLoadingProjects}
         >
           {isLoadingProjects ? (
@@ -97,7 +97,7 @@ export default function StudioPage() {
             const env = ENVIRONMENTS.find(env => env.id === e.target.value);
             if (env) setSelectedEnv(env);
           }}
-          className="bg-black/20 text-white text-sm px-3 py-1.5 rounded-lg border border-black/30 focus:outline-none focus:ring-2 focus:ring-white/30"
+          className="w-44 bg-gray-800/80 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/30"
         >
           {ENVIRONMENTS.map(env => (
             <option key={env.id} value={env.id}>{env.name}</option>
