@@ -43,6 +43,7 @@ export function ClaudeTerminal({
 
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [briefingSent, setBriefingSent] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -227,12 +228,24 @@ export function ClaudeTerminal({
                     }
                     const contextMessage = buildContextPrompt(ctx);
                     sendChunkedMessage(ws, contextMessage, () => {
-                      sendMultipleEnters(ws);
+                      sendMultipleEnters(ws, () => {
+                        // Briefing fully sent, unlock chat box
+                        setBriefingSent(true);
+                        if (xtermRef.current) {
+                          xtermRef.current.writeln('\x1b[32m\n✅ Ready - chat box unlocked\x1b[0m');
+                        }
+                      });
                     });
                   } else {
                     console.log('[ClaudeTerminal] No Susan context available, sending /start command');
                     sendChunkedMessage(ws, '/start', () => {
-                      sendMultipleEnters(ws);
+                      sendMultipleEnters(ws, () => {
+                        // Briefing fully sent, unlock chat box
+                        setBriefingSent(true);
+                        if (xtermRef.current) {
+                          xtermRef.current.writeln('\x1b[32m\n✅ Ready - chat box unlocked\x1b[0m');
+                        }
+                      });
                     });
                   }
                 }
@@ -294,6 +307,7 @@ export function ClaudeTerminal({
       console.log('[ClaudeTerminal] WebSocket closed');
       setConnected(false);
       setConnecting(false);
+      setBriefingSent(false);
       if (xtermRef.current) {
         xtermRef.current.writeln('\x1b[33m[Disconnected]\x1b[0m');
       }
@@ -307,6 +321,7 @@ export function ClaudeTerminal({
     wsRef.current = null;
     disconnectChad();
     setConnected(false);
+    setBriefingSent(false);
     resetSusan();
     briefingSentToClaudeRef.current = false;
     claudeCodeLoadedRef.current = false;
@@ -402,11 +417,13 @@ export function ClaudeTerminal({
         style={{ padding: '8px' }}
       />
 
-      {/* Chat Input Box - Orange themed */}
+      {/* Chat Input Box - Orange themed, locked until briefing sent */}
       <div className="shrink-0 border-t-2 border-orange-600">
         <div className="px-2 py-1 bg-orange-600/20 flex items-center gap-2">
           <span className="text-orange-400 text-xs font-medium">Chat with Claude</span>
           {!connected && <span className="text-orange-400/50 text-xs">(connecting...)</span>}
+          {connected && !briefingSent && <span className="text-yellow-400/70 text-xs">(loading Claude & briefing...)</span>}
+          {connected && briefingSent && <span className="text-green-400/70 text-xs">(ready)</span>}
         </div>
         <div className="px-2 py-2 bg-gray-800">
           <textarea
@@ -416,12 +433,16 @@ export function ClaudeTerminal({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (connected) sendInput();
+                if (connected && briefingSent) sendInput();
               }
             }}
-            placeholder={connected ? "Type a message and press Enter... (Shift+Enter for new line)" : "Connecting to Claude..."}
+            placeholder={
+              !connected ? "Connecting to Claude..." :
+              !briefingSent ? "Please wait - loading Claude and sending briefing..." :
+              "Type a message and press Enter... (Shift+Enter for new line)"
+            }
             rows={4}
-            disabled={!connected}
+            disabled={!connected || !briefingSent}
             className="w-full bg-gray-900 border-2 border-orange-600 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
