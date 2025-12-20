@@ -9,13 +9,46 @@ const pool = new Pool({
   password: 'kodiack2025',
 });
 
-// GET - List all clients
+// GET - List all clients with team and projects
 export async function GET() {
   try {
-    const result = await pool.query(
+    // Get clients
+    const clientsResult = await pool.query(
       'SELECT * FROM dev_clients ORDER BY created_at DESC'
     );
-    return NextResponse.json(result.rows);
+
+    // For each client, get assigned devs and projects
+    const clientsWithDetails = await Promise.all(
+      clientsResult.rows.map(async (client) => {
+        // Get assigned team members
+        const teamResult = await pool.query(
+          `SELECT u.id, u.name, u.first_name, u.last_name, u.email, u.avatar_url, uc.role
+           FROM dev_user_clients uc
+           JOIN dev_users u ON uc.user_id = u.id
+           WHERE uc.client_id = $1
+           ORDER BY u.first_name, u.last_name`,
+          [client.id]
+        );
+
+        // Get projects (only top-level, not children)
+        const projectsResult = await pool.query(
+          `SELECT id, name, slug, logo_url
+           FROM dev_projects
+           WHERE client_id = $1 AND (parent_id IS NULL OR is_parent = true)
+           ORDER BY sort_order, name
+           LIMIT 8`,
+          [client.id]
+        );
+
+        return {
+          ...client,
+          team: teamResult.rows,
+          projects: projectsResult.rows,
+        };
+      })
+    );
+
+    return NextResponse.json(clientsWithDetails);
   } catch (error) {
     console.error('Error fetching clients:', error);
     return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 });
