@@ -13,6 +13,7 @@ import { useUser } from '@/app/settings/UserContext';
 import { DraggableSidebar, SidebarItem } from './components';
 import BrowserPage from './browser/BrowserPage';
 import ClaudeTerminal from './terminal/ClaudeTerminal';
+import { SessionHubPage } from './session-hub';
 import { Plug, PlugZap } from 'lucide-react';
 import type { Project, Environment } from '@/types';
 import { ENVIRONMENTS } from '@/types';
@@ -139,6 +140,8 @@ export default function StudioPage() {
               project={selectedProject}
               env={selectedEnv}
             />
+          ) : activePanel === 'hub' ? (
+            <SessionHubPage />
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
               {activePanel ? `${activePanel} panel - coming soon` : 'Select a panel from the sidebar'}
