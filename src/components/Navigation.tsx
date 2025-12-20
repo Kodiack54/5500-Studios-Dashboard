@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, DoorOpen, Monitor, Users, Wrench, LayoutGrid
 import TimeClockDropdown from './TimeClockDropdown';
 import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
+import AITeamChat from './AITeamChat';
 import { ProductionStatusContext } from '@/app/layout';
 import { supabase } from '../lib/supabase';
 
@@ -38,7 +39,7 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
     { id: 'dev-tools', label: 'Dev Tools', path: '/dev-controls' },
     { id: 'helpdesk', label: 'HelpDesk', path: '/helpdesk' },
     { id: 'calendar', label: 'Calendar', path: '/calendar' },
-    { id: 'development', label: 'Development', path: 'http://161.35.229.220:5000', external: true },
+    { id: 'studio', label: 'Studio', path: '/studio' },
   ];
 
   const getActiveTab = () => {
@@ -47,8 +48,8 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
     if (pathname?.startsWith('/dev-controls')) return 'dev-tools';
     if (pathname?.startsWith('/helpdesk')) return 'helpdesk';
     if (pathname?.startsWith('/calendar')) return 'calendar';
-    if (pathname?.startsWith('/development')) return 'development';
-    if (pathname?.startsWith('/team')) return 'development'; // Redirect old team to development
+    if (pathname?.startsWith('/studio')) return 'studio';
+    if (pathname?.startsWith('/team')) return 'studio';
     return '';
   };
 
@@ -171,6 +172,9 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
 
               {/* Team Chat - Slack-like messaging for devs */}
               <ChatDropdown />
+
+              {/* AI Team Chat - Chat with AI workers */}
+              <AITeamChat />
 
               {/* Time Clock - EXACT MyKeystone style: w-10 h-10 rounded-xl */}
               <TimeClockDropdown />

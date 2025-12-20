@@ -6,6 +6,7 @@ import Navigation from "@/components/Navigation";
 import Sidebar from "@/components/Sidebar";
 import { UserProvider } from "@/app/settings/UserContext";
 import { createContext, useState, ReactNode, Suspense } from "react";
+import { usePathname } from "next/navigation";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = usePathname();
+  const isStudioPage = pathname?.startsWith('/studio');
+
   const [pageTitle, setPageTitle] = useState<{ title: string; description: string }>({
     title: 'Dashboard',
     description: 'Your daily overview'
@@ -66,10 +70,13 @@ export default function RootLayout({
                 <div className="h-screen flex flex-col overflow-hidden">
                   <Navigation pageTitle={pageTitle} pageActions={pageActions} />
                   <div className="flex flex-1 min-h-0 overflow-hidden">
-                    <Suspense fallback={<div className="w-64 bg-gray-900" />}>
-                      <Sidebar />
-                    </Suspense>
-                    <main className="flex-1 px-8 py-4 overflow-auto bg-gray-900">
+                    {/* Hide regular sidebar on Studio page - Studio has its own icon sidebar */}
+                    {!isStudioPage && (
+                      <Suspense fallback={<div className="w-64 bg-gray-900" />}>
+                        <Sidebar />
+                      </Suspense>
+                    )}
+                    <main className={`flex-1 bg-gray-900 ${isStudioPage ? 'overflow-hidden' : 'overflow-auto px-8 py-4'}`}>
                       {children}
                     </main>
                   </div>
