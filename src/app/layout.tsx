@@ -5,6 +5,7 @@ import "./globals.css";
 import Navigation from "@/components/Navigation";
 import Sidebar from "@/components/Sidebar";
 import { UserProvider } from "@/app/settings/UserContext";
+import { DeveloperProvider } from "@/app/contexts/DeveloperContext";
 import { createContext, useState, ReactNode, Suspense } from "react";
 import { usePathname } from "next/navigation";
 
@@ -60,30 +61,32 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <UserProvider>
-          <PageTitleContext.Provider value={setPageTitle}>
-            <PageActionsContext.Provider value={setPageActions}>
-              <ProductionStatusContext.Provider value={{
-                showServers,
-                setShowServers,
-                toggleServers: () => setShowServers(prev => !prev),
-              }}>
-                <div className="h-screen flex flex-col overflow-hidden">
-                  <Navigation pageTitle={pageTitle} pageActions={pageActions} />
-                  <div className="flex flex-1 min-h-0 overflow-hidden">
-                    {/* Hide regular sidebar on Studio page - Studio has its own icon sidebar */}
-                    {!isStudioPage && (
-                      <Suspense fallback={<div className="w-64 bg-gray-900" />}>
-                        <Sidebar />
-                      </Suspense>
-                    )}
-                    <main className={`flex-1 bg-gray-900 ${isStudioPage ? 'overflow-hidden' : 'overflow-auto px-8 py-4'}`}>
-                      {children}
-                    </main>
+          <DeveloperProvider>
+            <PageTitleContext.Provider value={setPageTitle}>
+              <PageActionsContext.Provider value={setPageActions}>
+                <ProductionStatusContext.Provider value={{
+                  showServers,
+                  setShowServers,
+                  toggleServers: () => setShowServers(prev => !prev),
+                }}>
+                  <div className="h-screen flex flex-col overflow-hidden">
+                    <Navigation pageTitle={pageTitle} pageActions={pageActions} />
+                    <div className="flex flex-1 min-h-0 overflow-hidden">
+                      {/* Hide regular sidebar on Studio page - Studio has its own icon sidebar */}
+                      {!isStudioPage && (
+                        <Suspense fallback={<div className="w-64 bg-gray-900" />}>
+                          <Sidebar />
+                        </Suspense>
+                      )}
+                      <main className={`flex-1 bg-gray-900 ${isStudioPage ? 'overflow-hidden' : 'overflow-auto px-8 py-4'}`}>
+                        {children}
+                      </main>
+                    </div>
                   </div>
-                </div>
-              </ProductionStatusContext.Provider>
-            </PageActionsContext.Provider>
-          </PageTitleContext.Provider>
+                </ProductionStatusContext.Provider>
+              </PageActionsContext.Provider>
+            </PageTitleContext.Provider>
+          </DeveloperProvider>
         </UserProvider>
       </body>
     </html>

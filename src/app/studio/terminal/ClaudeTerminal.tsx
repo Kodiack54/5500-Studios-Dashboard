@@ -1,0 +1,440 @@
+'use client';
+
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Power, PowerOff, FolderOpen, Brain } from 'lucide-react';
+import type { Terminal } from '@xterm/xterm';
+import type { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
+import { useUser } from '@/app/settings/UserContext';
+
+import {
+  type ChatLogMessage,
+  type ConversationMessage,
+  type ClaudeTerminalProps,
+  DEV_DROPLET,
+  BRIEFING_FALLBACK_MS,
+  cleanAnsiCodes,
+  sendChunkedMessage,
+  sendMultipleEnters,
+  sendEnter,
+  useSusanBriefing,
+  buildContextPrompt,
+  useChadTranscription,
+} from './index';
+
+export type { ChatLogMessage, ConversationMessage };
+
+export function ClaudeTerminal({
+  projectPath = '/var/www/NextBid_Dev/dev-studio-5000',
+  wsUrl,
+  port = 5410,
+  onMessage,
+  sendRef,
+  connectRef,
+  onConversationMessage,
+  onConnectionChange,
+}: ClaudeTerminalProps) {
+  const { user } = useUser();
+  const wsRef = useRef<WebSocket | null>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const contextSentRef = useRef(false);
+
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const {
+    memoryStatus,
+    susanContext,
+    susanContextRef,
+    fetchSusanContext,
+    reset: resetSusan,
+  } = useSusanBriefing(projectPath);
+
+  const {
+    connectToChad,
+    sendToChad,
+    disconnect: disconnectChad,
+  } = useChadTranscription(projectPath, user?.id);
+
+  const briefingSentToClaudeRef = useRef<boolean>(false);
+  const claudeCodeLoadedRef = useRef<boolean>(false);
+
+  const sendMessage = useCallback((message: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      sendChunkedMessage(wsRef.current, message);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (sendRef) {
+      sendRef.current = connected ? sendMessage : null;
+    }
+  }, [sendRef, sendMessage, connected]);
+
+  useEffect(() => {
+    onConnectionChange?.(connected);
+  }, [connected, onConnectionChange]);
+
+  // Initialize xterm.js
+  useEffect(() => {
+    if (!terminalRef.current || xtermRef.current) return;
+
+    const initTerminal = async () => {
+      const { Terminal } = await import('@xterm/xterm');
+      const { FitAddon } = await import('@xterm/addon-fit');
+
+      const term = new Terminal({
+        theme: {
+          background: '#0d1117',
+          foreground: '#e6edf3',
+          cursor: '#58a6ff',
+          cursorAccent: '#0d1117',
+          black: '#0d1117',
+          red: '#ff7b72',
+          green: '#3fb950',
+          yellow: '#d29922',
+          blue: '#58a6ff',
+          magenta: '#bc8cff',
+          cyan: '#39c5cf',
+          white: '#e6edf3',
+          brightBlack: '#484f58',
+          brightRed: '#ffa198',
+          brightGreen: '#56d364',
+          brightYellow: '#e3b341',
+          brightBlue: '#79c0ff',
+          brightMagenta: '#d2a8ff',
+          brightCyan: '#56d4dd',
+          brightWhite: '#ffffff',
+        },
+        fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
+        fontSize: 13,
+        lineHeight: 1.2,
+        cursorBlink: true,
+        cursorStyle: 'block',
+        scrollback: 5000,
+        convertEol: true,
+      });
+
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+
+      if (terminalRef.current) {
+        term.open(terminalRef.current);
+        fitAddon.fit();
+
+        term.writeln('\x1b[36m═══════════════════════════════════════════\x1b[0m');
+        term.writeln(`\x1b[36m   🤖 AI Worker Terminal (${port})            \x1b[0m`);
+        term.writeln('\x1b[36m═══════════════════════════════════════════\x1b[0m');
+        term.writeln('');
+        term.writeln('\x1b[33mClick "Connect" to start the AI worker\x1b[0m');
+        term.writeln('');
+
+        xtermRef.current = term;
+        fitAddonRef.current = fitAddon;
+      }
+    };
+
+    initTerminal();
+
+    const handleResize = () => {
+      if (fitAddonRef.current) {
+        setTimeout(() => fitAddonRef.current?.fit(), 100);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    const resizeObserver = new ResizeObserver(handleResize);
+    if (terminalRef.current) {
+      resizeObserver.observe(terminalRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
+      if (xtermRef.current) {
+        xtermRef.current.dispose();
+        xtermRef.current = null;
+      }
+      fitAddonRef.current = null;
+    };
+  }, [port]);
+
+  const connect = useCallback(async () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    setConnecting(true);
+    contextSentRef.current = false;
+
+    const contextPromise = fetchSusanContext();
+
+    const serverUrl = wsUrl || `ws://${DEV_DROPLET}:${port}?path=${encodeURIComponent(projectPath)}`;
+    console.log('[ClaudeTerminal] Connecting via WebSocket to:', serverUrl);
+
+    const ws = new WebSocket(serverUrl);
+
+    ws.onopen = async () => {
+      console.log('[ClaudeTerminal] WebSocket connected');
+      setConnected(true);
+      setConnecting(false);
+
+      connectToChad();
+
+      if (xtermRef.current) {
+        xtermRef.current.writeln('\x1b[32m[Connected]\x1b[0m');
+        xtermRef.current.writeln('');
+        xtermRef.current.writeln('\x1b[36m☕ Hold please... your AI worker will be right with you.\x1b[0m');
+        xtermRef.current.writeln('\x1b[90m   Starting Claude Code...\x1b[0m');
+
+        const context = await contextPromise;
+        if (context) {
+          xtermRef.current.writeln('\x1b[35m   📚 Susan is loading memory...\x1b[0m');
+        }
+        xtermRef.current.writeln('');
+      }
+
+      if (fitAddonRef.current && xtermRef.current) {
+        ws.send(JSON.stringify({ type: 'resize', cols: xtermRef.current.cols, rows: xtermRef.current.rows }));
+      }
+
+      // Start Claude Code after 2 seconds
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input', data: 'claude\r' }));
+        }
+      }, 2000);
+
+      // Fallback briefing timer
+      setTimeout(() => {
+        const ctx = susanContextRef.current;
+        if (!contextSentRef.current && ctx?.greeting && ws.readyState === WebSocket.OPEN && claudeCodeLoadedRef.current) {
+          console.log('[ClaudeTerminal] Fallback timer: sending Susan briefing');
+          contextSentRef.current = true;
+          briefingSentToClaudeRef.current = true;
+
+          if (xtermRef.current) {
+            xtermRef.current.writeln('\x1b[35m\n📚 Sending memory briefing to Claude...\x1b[0m');
+          }
+
+          const contextMessage = buildContextPrompt(ctx);
+          sendChunkedMessage(ws, contextMessage, () => {
+            sendMultipleEnters(ws);
+          });
+        }
+      }, BRIEFING_FALLBACK_MS);
+
+      setTimeout(() => inputRef.current?.focus(), 100);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'output' && xtermRef.current) {
+          xtermRef.current.write(msg.data);
+          xtermRef.current.scrollToBottom();
+
+          sendToChad(msg.data);
+
+          const cleanData = cleanAnsiCodes(msg.data);
+
+          // Detect when Claude Code TUI has loaded
+          if (!claudeCodeLoadedRef.current) {
+            const hasClaudeUI = cleanData.includes('Claude Code') ||
+                               cleanData.includes('Opus') ||
+                               cleanData.includes('What would you like') ||
+                               cleanData.includes('How can I help') ||
+                               cleanData.includes('❯');
+            if (hasClaudeUI) {
+              claudeCodeLoadedRef.current = true;
+              console.log('[ClaudeTerminal] Claude Code TUI detected');
+            }
+          }
+
+          // Detect Claude ready and send Susan's briefing
+          const currentContext = susanContextRef.current;
+          if (!contextSentRef.current && currentContext?.greeting && claudeCodeLoadedRef.current) {
+            const isClaudeReady = cleanData.includes('What would you like') ||
+                                  cleanData.includes('How can I help') ||
+                                  cleanData.includes('What can I help') ||
+                                  cleanData.includes('help you with') ||
+                                  cleanData.includes('work on today') ||
+                                  cleanData.includes('assist you') ||
+                                  /[❯>›»]\s*$/.test(cleanData) ||
+                                  cleanData.includes('❯') ||
+                                  (cleanData.includes('Opus') && cleanData.includes('Claude'));
+
+            if (isClaudeReady) {
+              contextSentRef.current = true;
+              console.log('[ClaudeTerminal] Detected Claude ready, sending Susan briefing');
+
+              if (xtermRef.current) {
+                xtermRef.current.writeln('\x1b[35m\n📚 Sending memory briefing to Claude...\x1b[0m');
+              }
+
+              setTimeout(() => {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                  const contextMessage = buildContextPrompt(currentContext);
+                  briefingSentToClaudeRef.current = true;
+                  sendChunkedMessage(wsRef.current, contextMessage, () => {
+                    sendMultipleEnters(wsRef.current!);
+                  });
+                }
+              }, 500);
+            }
+          }
+        } else if (msg.type === 'exit') {
+          if (xtermRef.current) {
+            xtermRef.current.writeln(`\x1b[33m[Process exited: ${msg.code}]\x1b[0m`);
+          }
+          setConnected(false);
+        }
+      } catch (e) {
+        console.error('[ClaudeTerminal] Message parse error:', e);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('[ClaudeTerminal] WebSocket error:', error);
+      if (xtermRef.current) {
+        xtermRef.current.writeln('\x1b[31m[Connection error]\x1b[0m');
+      }
+      setConnecting(false);
+    };
+
+    ws.onclose = () => {
+      console.log('[ClaudeTerminal] WebSocket closed');
+      setConnected(false);
+      setConnecting(false);
+      if (xtermRef.current) {
+        xtermRef.current.writeln('\x1b[33m[Disconnected]\x1b[0m');
+      }
+    };
+
+    wsRef.current = ws;
+  }, [projectPath, wsUrl, port, fetchSusanContext, susanContextRef, connectToChad, sendToChad]);
+
+  const disconnect = useCallback(() => {
+    wsRef.current?.close();
+    wsRef.current = null;
+    disconnectChad();
+    setConnected(false);
+    resetSusan();
+    briefingSentToClaudeRef.current = false;
+    claudeCodeLoadedRef.current = false;
+  }, [disconnectChad, resetSusan]);
+
+  useEffect(() => {
+    if (connectRef) {
+      connectRef.current = connect;
+    }
+  }, [connectRef, connect]);
+
+  const sendInput = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      if (inputValue.trim()) {
+        sendChunkedMessage(wsRef.current, inputValue);
+      } else {
+        sendEnter(wsRef.current);
+      }
+      setInputValue('');
+    }
+  }, [inputValue]);
+
+  return (
+    <div className="flex flex-col h-full bg-gray-900">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 bg-gray-800 border-b border-gray-700">
+        <div className="flex items-center gap-2">
+          <span className="text-base">🤖</span>
+          <span className="text-sm font-medium text-white">AI Worker</span>
+          <span className="text-xs text-orange-400/60">[:{port}]</span>
+          <span className={`px-1.5 py-0.5 text-xs rounded ${
+            connected ? 'bg-green-600/20 text-green-400' :
+            connecting ? 'bg-yellow-600/20 text-yellow-400' :
+            'bg-gray-700 text-gray-400'
+          }`}>
+            {connected ? 'Connected' : connecting ? 'Connecting...' : 'Disconnected'}
+          </span>
+          {connected && (
+            <span className={`flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
+              memoryStatus === 'loaded' ? 'bg-purple-600/20 text-purple-400' :
+              memoryStatus === 'loading' ? 'bg-yellow-600/20 text-yellow-400' :
+              'bg-gray-700 text-gray-500'
+            }`}>
+              <Brain className="w-3 h-3" />
+              {memoryStatus === 'loaded' ? 'Memory' : memoryStatus === 'loading' ? 'Loading...' : 'No Memory'}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {connected ? (
+            <button
+              onClick={disconnect}
+              className="flex items-center gap-1 px-2 py-1 text-xs bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded"
+            >
+              <PowerOff className="w-3 h-3" />
+              Disconnect
+            </button>
+          ) : (
+            <button
+              onClick={connect}
+              disabled={connecting}
+              className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600/20 text-green-400 hover:bg-green-600/30 rounded disabled:opacity-50"
+            >
+              <Power className="w-3 h-3" />
+              {connecting ? 'Connecting...' : 'Connect'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Project path */}
+      <div className="flex items-center gap-2 px-3 py-1 bg-gray-800/50 border-b border-gray-700 text-xs text-gray-500">
+        <FolderOpen className="w-3 h-3" />
+        <span className="truncate">{projectPath}</span>
+      </div>
+
+      {/* Terminal output */}
+      <div
+        ref={terminalRef}
+        className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
+        style={{ padding: '8px' }}
+      />
+
+      {/* Input bar */}
+      {connected && (
+        <div className="shrink-0 px-2 py-2 bg-gray-800 border-t border-gray-700">
+          <div className="flex gap-2 items-end">
+            <textarea
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  sendInput();
+                }
+              }}
+              placeholder="Type command and press Enter... (Shift+Enter for new line)"
+              rows={4}
+              className="flex-1 bg-gray-900 border border-orange-600/50 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 resize-none"
+            />
+            <button
+              onClick={sendInput}
+              disabled={!inputValue.trim()}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded text-sm h-fit"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default ClaudeTerminal;

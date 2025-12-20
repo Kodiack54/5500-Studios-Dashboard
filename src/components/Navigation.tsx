@@ -9,6 +9,7 @@ import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
 import AITeamChat from './AITeamChat';
 import { ProductionStatusContext } from '@/app/layout';
+import { useDeveloper, DEVELOPER_TEAMS } from '@/app/contexts/DeveloperContext';
 import { supabase } from '../lib/supabase';
 
 // Project definitions for the switcher
@@ -31,6 +32,7 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [selectedProject, setSelectedProject] = useState(projects[0]);
   const { showServers, toggleServers } = useContext(ProductionStatusContext);
+  const { selectedTeam, selectTeamById } = useDeveloper();
 
   // Tab navigation - exactly like MyKeystone style
   // Tabs: Servers / Dev Tools / HelpDesk / Calendar / Development
@@ -197,12 +199,15 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
             {/* Left: Developer Selector */}
             <div className="w-48 flex items-center justify-start mr-4">
               <select
+                value={selectedTeam.id}
+                onChange={(e) => selectTeamById(e.target.value)}
                 className="w-full bg-gray-800/80 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/30"
-                defaultValue="dev1"
               >
-                <option value="dev1">Dev 1 (5410-5416)</option>
-                <option value="dev2">Dev 2 (5420-5426)</option>
-                <option value="dev3">Dev 3 (5430-5436)</option>
+                {DEVELOPER_TEAMS.map(team => (
+                  <option key={team.id} value={team.id}>
+                    {team.label} ({team.portRange})
+                  </option>
+                ))}
               </select>
             </div>
 

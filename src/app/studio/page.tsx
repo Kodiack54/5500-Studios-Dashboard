@@ -3,12 +3,15 @@
 /**
  * Studio Page - Development Environment
  * Includes browser preview with project/environment selection
+ * and Claude terminals for AI workers
  */
 
 import { useState, useEffect, useContext } from 'react';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
+import { useDeveloper } from '@/app/contexts/DeveloperContext';
 import { DraggableSidebar, SidebarItem } from './components';
 import BrowserPage from './browser/BrowserPage';
+import ClaudeTerminal from './terminal/ClaudeTerminal';
 import type { Project, Environment } from '@/types';
 import { ENVIRONMENTS } from '@/types';
 
@@ -30,6 +33,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
 export default function StudioPage() {
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
+  const { selectedTeam } = useDeveloper();
   const [activePanel, setActivePanel] = useState<string | null>('browser');
 
   // Project and environment state
@@ -141,15 +145,10 @@ export default function StudioPage() {
 
         {/* Right: Claude Terminal area */}
         <div className="w-[400px] bg-gray-850 flex flex-col flex-shrink-0">
-          <div className="h-10 bg-gray-800 border-b border-gray-700 flex items-center px-3">
-            <span className="text-sm font-medium text-white">Claude Terminal</span>
-            <span className="ml-2 w-2 h-2 rounded-full bg-red-500" title="Disconnected"></span>
-          </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-gray-600 text-sm text-center px-4">
-              Terminal area - will import ClaudeTerminal from dev-studio-5000
-            </div>
-          </div>
+          <ClaudeTerminal
+            port={selectedTeam.basePort}
+            projectPath={selectedProject?.server_path || '/var/www/NextBid_Dev/dev-studio-5000'}
+          />
         </div>
       </div>
     </div>
