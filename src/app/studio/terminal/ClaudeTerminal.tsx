@@ -332,6 +332,17 @@ export function ClaudeTerminal({
     }
   }, [connectRef, connect]);
 
+  // Auto-connect when terminal is mounted (Studio page only renders us when session is connected)
+  useEffect(() => {
+    if (!connected && !connecting && wsRef.current === null) {
+      // Small delay to let xterm initialize first
+      const timer = setTimeout(() => {
+        connect();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const sendInput = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       if (inputValue.trim()) {
@@ -405,9 +416,13 @@ export function ClaudeTerminal({
         style={{ padding: '8px' }}
       />
 
-      {/* Input bar */}
-      {connected && (
-        <div className="shrink-0 px-2 py-2 bg-gray-800 border-t border-gray-700">
+      {/* Chat Input Box - Orange themed */}
+      <div className="shrink-0 border-t-2 border-orange-600">
+        <div className="px-2 py-1 bg-orange-600/20 flex items-center gap-2">
+          <span className="text-orange-400 text-xs font-medium">Chat with Claude</span>
+          {!connected && <span className="text-orange-400/50 text-xs">(connecting...)</span>}
+        </div>
+        <div className="px-2 py-2 bg-gray-800">
           <div className="flex gap-2 items-end">
             <textarea
               ref={inputRef}
@@ -416,23 +431,24 @@ export function ClaudeTerminal({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  sendInput();
+                  if (connected) sendInput();
                 }
               }}
-              placeholder="Type command and press Enter... (Shift+Enter for new line)"
-              rows={4}
-              className="flex-1 bg-gray-900 border border-orange-600/50 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 resize-none"
+              placeholder={connected ? "Type a message and press Enter... (Shift+Enter for new line)" : "Connecting to Claude..."}
+              rows={3}
+              disabled={!connected}
+              className="flex-1 bg-gray-900 border-2 border-orange-600 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <button
               onClick={sendInput}
-              disabled={!inputValue.trim()}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded text-sm h-fit"
+              disabled={!connected || !inputValue.trim()}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded text-sm font-medium h-fit"
             >
               Send
             </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
