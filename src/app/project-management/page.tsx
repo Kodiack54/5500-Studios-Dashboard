@@ -2,11 +2,33 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Plus, ArrowLeft, ChevronRight, ChevronDown, Settings, Server, GitBranch } from 'lucide-react';
+import { Plus, ArrowLeft, ChevronRight, ChevronDown, Settings, GripVertical } from 'lucide-react';
 import { Project, TabType, TABS } from './types';
 import ProjectHeader from './components/ProjectHeader';
 import ProjectTabs from './components/ProjectTabs';
 import ProjectForm from './components/ProjectForm';
+
+// Drag and Drop
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // Tab Components
 import TodosTab from './tabs/TodosTab';
@@ -55,6 +77,25 @@ function ProjectManagementContent() {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const [projectStats, setProjectStats] = useState<Record<string, ProjectStats>>({});
+
+  // Stats type
+  interface ProjectStats {
+    sessions: { pending: number; processed: number; total: number };
+    todos: { pending: number; completed: number; total: number };
+    knowledge: number;
+    bugs: number;
+    code_changes: number;
+    last_activity: string | null;
+  }
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   // Group projects by parent
   const parentProjects = projects.filter(p => p.is_parent);
@@ -136,61 +177,147 @@ function ProjectManagementContent() {
     handleFormClose();
   };
 
-  // Move project up or down in the list
-  const handleMoveProject = async (projectId: string, direction: 'up' | 'down') => {
-    const currentIndex = projects.findIndex(p => p.id === projectId);
-    if (currentIndex === -1) return;
+  // Drag handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
 
-    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (swapIndex < 0 || swapIndex >= projects.length) return;
+  const handleDragOver = (event: DragOverEvent) => {
+    setOverId(event.over?.id as string || null);
+  };
 
-    const currentProject = projects[currentIndex];
-    const swapProject = projects[swapIndex];
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    setOverId(null);
 
-    // Swap sort_order values
-    try {
-      await Promise.all([
-        fetch('/project-management/api/projects', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: currentProject.id, sort_order: swapProject.sort_order }),
-        }),
-        fetch('/project-management/api/projects', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: swapProject.id, sort_order: currentProject.sort_order }),
-        }),
-      ]);
+    if (!over || active.id === over.id) return;
 
-      // Refresh the list
+    const activeProject = projects.find(p => p.id === active.id);
+    const overProject = projects.find(p => p.id === over.id);
+
+    if (!activeProject || !overProject) return;
+
+    // Case 1: Reordering parents
+    if (activeProject.is_parent && overProject.is_parent) {
+      const oldIndex = parentProjects.findIndex(p => p.id === active.id);
+      const newIndex = parentProjects.findIndex(p => p.id === over.id);
+
+      if (oldIndex !== newIndex) {
+        const reordered = arrayMove(parentProjects, oldIndex, newIndex);
+        // Update sort_order for all affected parents
+        const updates = reordered.map((p, idx) =>
+          fetch('/project-management/api/projects', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.id, sort_order: idx }),
+          })
+        );
+        await Promise.all(updates);
+        fetchProjects();
+      }
+      return;
+    }
+
+    // Case 2: Reordering children within same parent
+    if (!activeProject.is_parent && !overProject.is_parent &&
+        activeProject.parent_id === overProject.parent_id) {
+      const siblings = childProjects.filter(p => p.parent_id === activeProject.parent_id);
+      const oldIndex = siblings.findIndex(p => p.id === active.id);
+      const newIndex = siblings.findIndex(p => p.id === over.id);
+
+      if (oldIndex !== newIndex) {
+        const reordered = arrayMove(siblings, oldIndex, newIndex);
+        const updates = reordered.map((p, idx) =>
+          fetch('/project-management/api/projects', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.id, sort_order: idx }),
+          })
+        );
+        await Promise.all(updates);
+        fetchProjects();
+      }
+      return;
+    }
+
+    // Case 3: Moving child to different parent (drop on parent)
+    if (!activeProject.is_parent && overProject.is_parent) {
+      await fetch('/project-management/api/projects', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: activeProject.id, parent_id: overProject.id }),
+      });
+      // Expand the target parent to show the moved child
+      setExpandedParents(prev => new Set([...prev, overProject.id]));
       fetchProjects();
-    } catch (error) {
-      console.error('Error moving project:', error);
+      return;
+    }
+
+    // Case 4: Moving child to different parent (drop on sibling in that parent)
+    if (!activeProject.is_parent && !overProject.is_parent &&
+        activeProject.parent_id !== overProject.parent_id && overProject.parent_id) {
+      await fetch('/project-management/api/projects', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: activeProject.id, parent_id: overProject.parent_id }),
+      });
+      setExpandedParents(prev => new Set([...prev, overProject.parent_id!]));
+      fetchProjects();
+      return;
+    }
+
+    // Case 5: Reordering orphan projects
+    if (!activeProject.is_parent && !activeProject.parent_id &&
+        !overProject.is_parent && !overProject.parent_id) {
+      const oldIndex = orphanProjects.findIndex(p => p.id === active.id);
+      const newIndex = orphanProjects.findIndex(p => p.id === over.id);
+
+      if (oldIndex !== newIndex) {
+        const reordered = arrayMove(orphanProjects, oldIndex, newIndex);
+        const updates = reordered.map((p, idx) =>
+          fetch('/project-management/api/projects', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.id, sort_order: idx + 1000 }), // Offset to avoid conflicts
+          })
+        );
+        await Promise.all(updates);
+        fetchProjects();
+      }
     }
   };
+
+  // Get the active dragging project for overlay
+  const activeProject = activeId ? projects.find(p => p.id === activeId) : null;
 
   const renderTabContent = () => {
     if (!selectedProject) return null;
 
     const projectPath = selectedProject.server_path || '';
+    const isParent = selectedProject.is_parent || false;
+    // Get child project IDs if this is a parent
+    const childProjectIds = isParent
+      ? projects.filter(p => p.parent_id === selectedProject.id).map(p => p.id)
+      : [];
 
     switch (activeTab) {
       case 'todos':
-        return <TodosTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <TodosTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'knowledge':
-        return <KnowledgeTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <KnowledgeTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'docs':
-        return <DocsTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <DocsTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'database':
-        return <DatabaseTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <DatabaseTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'structure':
-        return <StructureTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <StructureTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'conventions':
-        return <ConventionsTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <ConventionsTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'notepad':
-        return <NotepadTab projectPath={projectPath} />;
+        return <NotepadTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'bugs':
-        return <BugsTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <BugsTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       default:
         return null;
     }
@@ -249,19 +376,57 @@ function ProjectManagementContent() {
     );
   }
 
-  // Render a parent project row
-  const renderParentRow = (project: Project) => {
+  // Sortable Parent Row Component
+  const SortableParentRow = ({ project }: { project: Project }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: project.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
     const children = getChildren(project.id);
     const isExpanded = expandedParents.has(project.id);
     const hasChildren = children.length > 0;
 
+    // Aggregate child info
+    const devChildren = children.filter(c => detectEnvironment(c) === 'dev');
+    const testChildren = children.filter(c => detectEnvironment(c) === 'test');
+    const prodChildren = children.filter(c => detectEnvironment(c) === 'prod');
+
+    // Get all ports from children
+    const childDevPorts = children.filter(c => c.port_dev).map(c => c.port_dev);
+    const childTestPorts = children.filter(c => c.port_test).map(c => c.port_test);
+    const childProdPorts = children.filter(c => c.port_prod).map(c => c.port_prod);
+
     return (
-      <div key={project.id} className="mb-2">
+      <div ref={setNodeRef} style={style} className="mb-2">
         {/* Parent Row */}
         <div
-          className="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-blue-500 transition-colors group"
+          className={`bg-gray-800 border rounded-lg p-4 transition-colors group ${
+            overId === project.id && activeId && !projects.find(p => p.id === activeId)?.is_parent
+              ? 'border-blue-500 bg-blue-500/10'
+              : 'border-gray-700 hover:border-blue-500'
+          }`}
         >
           <div className="flex items-center gap-3">
+            {/* Drag Handle */}
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 text-gray-600 hover:text-white cursor-grab active:cursor-grabbing"
+            >
+              <GripVertical className="w-4 h-4" />
+            </button>
+
             {/* Expand Arrow */}
             <button
               onClick={() => hasChildren && toggleParent(project.id)}
@@ -291,23 +456,48 @@ function ProjectManagementContent() {
               <div className="flex items-center gap-2">
                 <h3 className="text-white font-semibold">{project.name}</h3>
                 <span className="px-2 py-0.5 bg-purple-600/20 text-purple-400 rounded text-xs">Parent</span>
-                {hasChildren && (
-                  <span className="text-gray-500 text-xs">({children.length} projects)</span>
-                )}
               </div>
-              <span className="text-gray-500 text-xs">{project.slug}</span>
+              {/* Child environment summary */}
+              {hasChildren && (
+                <div className="flex items-center gap-2 mt-1">
+                  {devChildren.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-blue-600/20 text-blue-400 rounded text-[10px]">
+                      {devChildren.length} Dev
+                    </span>
+                  )}
+                  {testChildren.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-yellow-600/20 text-yellow-400 rounded text-[10px]">
+                      {testChildren.length} Test
+                    </span>
+                  )}
+                  {prodChildren.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-green-600/20 text-green-400 rounded text-[10px]">
+                      {prodChildren.length} Prod
+                    </span>
+                  )}
+                  {children.length > 0 && devChildren.length === 0 && testChildren.length === 0 && prodChildren.length === 0 && (
+                    <span className="text-gray-500 text-[10px]">{children.length} projects</span>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Ports */}
+            {/* Dev/Test/Prod ports - one of each */}
             <div className="flex items-center gap-2">
-              {project.port_dev && (
-                <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs">Dev:{project.port_dev}</span>
+              {(childDevPorts[0] || project.port_dev) && (
+                <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs">
+                  :{childDevPorts[0] || project.port_dev}
+                </span>
               )}
-              {project.port_test && (
-                <span className="px-2 py-0.5 bg-yellow-600/20 text-yellow-400 rounded text-xs">Test:{project.port_test}</span>
+              {(childTestPorts[0] || project.port_test) && (
+                <span className="px-2 py-0.5 bg-yellow-600/20 text-yellow-400 rounded text-xs">
+                  :{childTestPorts[0] || project.port_test}
+                </span>
               )}
-              {project.port_prod && (
-                <span className="px-2 py-0.5 bg-green-600/20 text-green-400 rounded text-xs">Prod:{project.port_prod}</span>
+              {(childProdPorts[0] || project.port_prod) && (
+                <span className="px-2 py-0.5 bg-green-600/20 text-green-400 rounded text-xs">
+                  :{childProdPorts[0] || project.port_prod}
+                </span>
               )}
             </div>
 
@@ -324,67 +514,124 @@ function ProjectManagementContent() {
         {/* Children (when expanded) */}
         {isExpanded && children.length > 0 && (
           <div className="ml-8 mt-1 space-y-1 border-l-2 border-gray-700 pl-4">
-            {children.map(child => {
-              const env = detectEnvironment(child);
-              const envColor = env ? ENV_COLORS[env] : null;
-
-              return (
-                <div
-                  key={child.id}
-                  onClick={() => handleSelectProject(child)}
-                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors group
-                    ${envColor ? `${envColor.bg} border ${envColor.border}` : 'bg-gray-800 border border-gray-700'}
-                    hover:brightness-110`}
-                >
-                  {/* Environment Badge */}
-                  {envColor && (
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${envColor.text} ${envColor.bg}`}>
-                      {envColor.label}
-                    </span>
-                  )}
-
-                  {/* Name */}
-                  <span className={`font-medium ${envColor ? envColor.text : 'text-white'}`}>
-                    {child.name}
-                  </span>
-
-                  {/* Port */}
-                  {(child.port_dev || child.port_test || child.port_prod) && (
-                    <span className="text-gray-500 text-xs ml-auto">
-                      :{child.port_dev || child.port_test || child.port_prod}
-                    </span>
-                  )}
-
-                  {/* Edit */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleEditProject(child); }}
-                    className="p-1 text-gray-500 hover:text-white hover:bg-gray-600 rounded opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Settings className="w-3 h-3" />
-                  </button>
-                </div>
-              );
-            })}
+            <SortableContext items={children.map(c => c.id)} strategy={verticalListSortingStrategy}>
+              {children.map(child => (
+                <SortableChildRow key={child.id} child={child} />
+              ))}
+            </SortableContext>
           </div>
         )}
       </div>
     );
   };
 
-  // Render orphan project (no parent)
-  const renderOrphanRow = (project: Project) => {
+  // Sortable Child Row Component
+  const SortableChildRow = ({ child }: { child: Project }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: child.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    const env = detectEnvironment(child);
+    const envColor = env ? ENV_COLORS[env] : null;
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors group
+          ${envColor ? `${envColor.bg} border ${envColor.border}` : 'bg-gray-800 border border-gray-700'}
+          hover:brightness-110`}
+      >
+        {/* Drag Handle */}
+        <button
+          {...attributes}
+          {...listeners}
+          className="p-1 text-gray-500 hover:text-white cursor-grab active:cursor-grabbing"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="w-3 h-3" />
+        </button>
+
+        {/* Environment Badge */}
+        {envColor && (
+          <span className={`px-2 py-1 rounded text-xs font-medium ${envColor.text} ${envColor.bg}`}>
+            {envColor.label}
+          </span>
+        )}
+
+        {/* Name */}
+        <span
+          className={`font-medium flex-1 ${envColor ? envColor.text : 'text-white'}`}
+          onClick={() => handleSelectProject(child)}
+        >
+          {child.name}
+        </span>
+
+        {/* Port */}
+        {(child.port_dev || child.port_test || child.port_prod) && (
+          <span className="text-gray-500 text-xs">
+            :{child.port_dev || child.port_test || child.port_prod}
+          </span>
+        )}
+
+        {/* Edit */}
+        <button
+          onClick={(e) => { e.stopPropagation(); handleEditProject(child); }}
+          className="p-1 text-gray-500 hover:text-white hover:bg-gray-600 rounded opacity-0 group-hover:opacity-100 transition-all"
+        >
+          <Settings className="w-3 h-3" />
+        </button>
+      </div>
+    );
+  };
+
+  // Sortable Orphan Row Component
+  const SortableOrphanRow = ({ project }: { project: Project }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: project.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
     const env = detectEnvironment(project);
     const envColor = env ? ENV_COLORS[env] : null;
 
     return (
       <div
-        key={project.id}
-        onClick={() => handleSelectProject(project)}
+        ref={setNodeRef}
+        style={style}
         className="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-blue-500 transition-colors cursor-pointer group mb-2"
       >
         <div className="flex items-center gap-3">
-          {/* Spacer for alignment */}
-          <div className="w-7" />
+          {/* Drag Handle */}
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-1 text-gray-600 hover:text-white cursor-grab active:cursor-grabbing"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
 
           {/* Logo */}
           {project.logo_url ? (
@@ -397,7 +644,7 @@ function ProjectManagementContent() {
           )}
 
           {/* Name */}
-          <div className="flex-1">
+          <div className="flex-1" onClick={() => handleSelectProject(project)}>
             <div className="flex items-center gap-2">
               <h3 className="text-white font-semibold">{project.name}</h3>
               {envColor && (
@@ -471,18 +718,46 @@ function ProjectManagementContent() {
             </button>
           </div>
         ) : (
-          <div>
-            {/* Parent Projects with Children */}
-            {parentProjects.map(parent => renderParentRow(parent))}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <div>
+              {/* Parent Projects with Children */}
+              <SortableContext items={parentProjects.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                {parentProjects.map(parent => (
+                  <SortableParentRow key={parent.id} project={parent} />
+                ))}
+              </SortableContext>
 
-            {/* Orphan Projects (no parent) */}
-            {orphanProjects.length > 0 && parentProjects.length > 0 && (
-              <div className="mt-6 mb-3">
-                <h3 className="text-gray-500 text-sm font-medium px-2">Standalone Projects</h3>
-              </div>
-            )}
-            {orphanProjects.map(project => renderOrphanRow(project))}
-          </div>
+              {/* Orphan Projects (no parent) */}
+              {orphanProjects.length > 0 && parentProjects.length > 0 && (
+                <div className="mt-6 mb-3">
+                  <h3 className="text-gray-500 text-sm font-medium px-2">Standalone Projects</h3>
+                </div>
+              )}
+              <SortableContext items={orphanProjects.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                {orphanProjects.map(project => (
+                  <SortableOrphanRow key={project.id} project={project} />
+                ))}
+              </SortableContext>
+            </div>
+
+            {/* Drag Overlay */}
+            <DragOverlay>
+              {activeProject && (
+                <div className="bg-gray-800 border border-blue-500 rounded-lg p-4 shadow-xl opacity-90">
+                  <div className="flex items-center gap-3">
+                    <GripVertical className="w-4 h-4 text-blue-400" />
+                    <span className="text-white font-medium">{activeProject.name}</span>
+                  </div>
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         )}
       </div>
 

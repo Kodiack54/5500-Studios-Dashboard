@@ -171,7 +171,7 @@ export default function ProjectManagementPanel({ onProjectsChange }: ProjectMana
       case 'conventions':
         return <ConventionsTab projectPath={projectPath} projectId={selectedProject.id} />;
       case 'notepad':
-        return <NotepadTab projectPath={projectPath} />;
+        return <NotepadTab projectPath={projectPath} projectId={selectedProject.id} />;
       case 'bugs':
         return <BugsTab projectPath={projectPath} projectId={selectedProject.id} />;
       default:

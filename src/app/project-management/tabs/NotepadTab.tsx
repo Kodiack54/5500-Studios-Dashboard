@@ -6,10 +6,21 @@ import { Note } from '../types';
 
 interface NotepadTabProps {
   projectPath: string;
+  projectId: string;
+  isParent?: boolean;
+  childProjectIds?: string[];
 }
 
-export default function NotepadTab({ projectPath }: NotepadTabProps) {
+interface ProjectPath {
+  id: string;
+  project_id: string;
+  path: string;
+  label: string;
+}
+
+export default function NotepadTab({ projectPath, projectId, isParent, childProjectIds }: NotepadTabProps) {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [projectPaths, setProjectPaths] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -19,17 +30,61 @@ export default function NotepadTab({ projectPath }: NotepadTabProps) {
   });
   const [isSaving, setIsSaving] = useState(false);
 
+  // Fetch project paths first (for parent aggregation)
   useEffect(() => {
-    fetchNotes();
-  }, [projectPath]);
+    fetchProjectPaths();
+  }, [projectId, isParent, childProjectIds]);
+
+  // Fetch notes when project paths are ready
+  useEffect(() => {
+    if (projectPaths.length > 0) {
+      fetchNotes();
+    }
+  }, [projectPaths]);
+
+  const fetchProjectPaths = async () => {
+    try {
+      // If parent, fetch paths for all child projects
+      const projectIdsToFetch = isParent && childProjectIds?.length
+        ? childProjectIds
+        : [projectId];
+
+      const allPaths: string[] = [];
+
+      for (const pid of projectIdsToFetch) {
+        const response = await fetch(`/project-management/api/project-paths?project_id=${pid}`);
+        const data = await response.json();
+        if (data.success && data.paths) {
+          data.paths.forEach((p: ProjectPath) => allPaths.push(p.path));
+        }
+      }
+
+      // If no paths found, use the projectPath directly
+      if (allPaths.length === 0) {
+        allPaths.push(projectPath);
+      }
+
+      setProjectPaths(allPaths);
+    } catch (error) {
+      console.error('Error fetching project paths:', error);
+      setProjectPaths([projectPath]);
+    }
+  };
 
   const fetchNotes = async () => {
     try {
-      const response = await fetch(`/api/susan/notes?project=${encodeURIComponent(projectPath)}`);
-      const data = await response.json();
-      if (data.success) {
-        setNotes(data.notes || []);
+      const allNotes: Note[] = [];
+
+      // Fetch notes from all project paths
+      for (const path of projectPaths) {
+        const response = await fetch(`/api/susan/notes?project=${encodeURIComponent(path)}`);
+        const data = await response.json();
+        if (data.success && data.notes) {
+          allNotes.push(...data.notes);
+        }
       }
+
+      setNotes(allNotes);
     } catch (error) {
       console.error('Error fetching notes:', error);
     } finally {

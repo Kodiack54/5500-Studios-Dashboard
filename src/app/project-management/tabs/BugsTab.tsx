@@ -34,6 +34,8 @@ interface BugReport {
 interface BugsTabProps {
   projectPath: string;
   projectId: string;
+  isParent?: boolean;
+  childProjectIds?: string[];
 }
 
 const SEVERITY_CONFIG = {
@@ -51,7 +53,7 @@ const STATUS_CONFIG = {
   duplicate: { label: 'Duplicate', color: 'bg-purple-600/20 text-purple-400', icon: Bug },
 };
 
-export default function BugsTab({ projectPath, projectId }: BugsTabProps) {
+export default function BugsTab({ projectPath, projectId, isParent, childProjectIds }: BugsTabProps) {
   const [projectPaths, setProjectPaths] = useState<ProjectPath[]>([]);
   const [selectedPath, setSelectedPath] = useState<ProjectPath | null>(null);
   const [bugs, setBugs] = useState<BugReport[]>([]);
@@ -84,16 +86,27 @@ export default function BugsTab({ projectPath, projectId }: BugsTabProps) {
 
   const fetchProjectPaths = async () => {
     try {
-      const response = await fetch(`/project-management/api/project-paths?project_id=${projectId}`);
-      const data = await response.json();
-      if (data.success) {
-        setProjectPaths(data.paths || []);
-        const mainPath = data.paths?.find((p: ProjectPath) => p.path === projectPath);
-        if (mainPath) {
-          setSelectedPath(mainPath);
-        } else if (data.paths?.length > 0) {
-          setSelectedPath(data.paths[0]);
+      // If parent, fetch paths for all child projects
+      const projectIdsToFetch = isParent && childProjectIds?.length
+        ? childProjectIds
+        : [projectId];
+
+      const allPaths: ProjectPath[] = [];
+
+      for (const pid of projectIdsToFetch) {
+        const response = await fetch(`/project-management/api/project-paths?project_id=${pid}`);
+        const data = await response.json();
+        if (data.success && data.paths) {
+          allPaths.push(...data.paths);
         }
+      }
+
+      setProjectPaths(allPaths);
+      const mainPath = allPaths.find((p: ProjectPath) => p.path === projectPath);
+      if (mainPath) {
+        setSelectedPath(mainPath);
+      } else if (allPaths.length > 0) {
+        setSelectedPath(allPaths[0]);
       }
     } catch (error) {
       console.error('Error fetching project paths:', error);

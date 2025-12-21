@@ -109,7 +109,7 @@ export default function ProjectForm({ project, onClose, onSave }: ProjectFormPro
         port_prod: formData.port_prod ? parseInt(formData.port_prod) : null,
       };
 
-      const url = project ? `/api/projects/${project.id}` : '/project-management/api/projects';
+      const url = project ? `/project-management/api/projects/${project.id}` : '/project-management/api/projects';
       const method = project ? 'PATCH' : 'POST';
 
       const response = await fetch(url, {

@@ -26,9 +26,11 @@ interface TreeNode {
 interface StructureTabProps {
   projectPath: string;
   projectId: string;
+  isParent?: boolean;
+  childProjectIds?: string[];
 }
 
-export default function StructureTab({ projectPath, projectId }: StructureTabProps) {
+export default function StructureTab({ projectPath, projectId, isParent, childProjectIds }: StructureTabProps) {
   const [projectPaths, setProjectPaths] = useState<ProjectPath[]>([]);
   const [selectedPath, setSelectedPath] = useState<ProjectPath | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
@@ -53,16 +55,27 @@ export default function StructureTab({ projectPath, projectId }: StructureTabPro
   const fetchProjectPaths = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/project-management/api/project-paths?project_id=${projectId}`);
-      const data = await response.json();
-      if (data.success) {
-        setProjectPaths(data.paths || []);
-        const mainPath = data.paths?.find((p: ProjectPath) => p.path === projectPath);
-        if (mainPath) {
-          setSelectedPath(mainPath);
-        } else if (data.paths?.length > 0) {
-          setSelectedPath(data.paths[0]);
+      // If parent, fetch paths for all child projects
+      const projectIdsToFetch = isParent && childProjectIds?.length
+        ? childProjectIds
+        : [projectId];
+
+      const allPaths: ProjectPath[] = [];
+
+      for (const pid of projectIdsToFetch) {
+        const response = await fetch(`/project-management/api/project-paths?project_id=${pid}`);
+        const data = await response.json();
+        if (data.success && data.paths) {
+          allPaths.push(...data.paths);
         }
+      }
+
+      setProjectPaths(allPaths);
+      const mainPath = allPaths.find((p: ProjectPath) => p.path === projectPath);
+      if (mainPath) {
+        setSelectedPath(mainPath);
+      } else if (allPaths.length > 0) {
+        setSelectedPath(allPaths[0]);
       }
     } catch (error) {
       console.error('Error fetching project paths:', error);
