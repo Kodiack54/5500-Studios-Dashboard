@@ -61,10 +61,12 @@ interface DatabaseStats {
 interface Project {
   id: string;
   name: string;
-  path?: string;
-  todos?: number;
-  knowledge?: number;
-  bugs?: number;
+  slug?: string;
+  server_path?: string;
+  parent_id?: string | null;
+  todos: number;
+  knowledge: number;
+  bugs: number;
 }
 
 export default function SessionLogsPage() {
@@ -85,10 +87,11 @@ export default function SessionLogsPage() {
 
     try {
       // Fetch sessions, pipeline buckets, Jen's extraction buckets, and projects
-      const [sessionsRes, bucketsRes, extractionsRes, projectsRes] = await Promise.all([
+      const [sessionsRes, bucketsRes, extractionsRes, projectsListRes, projectsSummaryRes] = await Promise.all([
         fetch('/api/ai-sessions?limit=100', { cache: 'no-store' }),
         fetch('/api/ai-sessions/buckets', { cache: 'no-store' }),
         fetch('/api/ai-extractions', { cache: 'no-store' }),
+        fetch('/project-management/api/projects', { cache: 'no-store' }),
         fetch('/project-management/api/projects/summary', { cache: 'no-store' }),
       ]);
 
@@ -99,7 +102,8 @@ export default function SessionLogsPage() {
       const sessionsData = await sessionsRes.json();
       const bucketsData = await bucketsRes.json();
       const extractionsData = extractionsRes.ok ? await extractionsRes.json() : { success: false };
-      const projectsData = projectsRes.ok ? await projectsRes.json() : { success: false };
+      const projectsListData = projectsListRes.ok ? await projectsListRes.json() : { success: false };
+      const projectsSummaryData = projectsSummaryRes.ok ? await projectsSummaryRes.json() : { success: false };
 
       if (sessionsData.success) {
         setSessions(sessionsData.sessions || []);
@@ -114,8 +118,25 @@ export default function SessionLogsPage() {
         setJenBuckets(extractionsData.buckets || {});
       }
 
-      if (projectsData.success) {
-        setProjects(projectsData.projects || []);
+      // Merge projects list with summaries - only parent projects (no parent_id)
+      if (projectsListData.success && projectsListData.projects) {
+        const summaries = projectsSummaryData.success ? projectsSummaryData.summaries || {} : {};
+        const parentProjects = projectsListData.projects
+          .filter((p: { parent_id?: string | null }) => !p.parent_id)
+          .map((p: { id: string; name: string; slug?: string; server_path?: string }) => {
+            const summary = summaries[p.id] || {};
+            return {
+              id: p.id,
+              name: p.name,
+              slug: p.slug,
+              server_path: p.server_path,
+              parent_id: null,
+              todos: summary.todos?.total || 0,
+              knowledge: summary.knowledge || 0,
+              bugs: summary.bugs || 0,
+            };
+          });
+        setProjects(parentProjects);
       }
 
       // Fetch each team's stats
@@ -445,19 +466,28 @@ function BucketRow({ name, count }: { name: string; count: number }) {
 
 // Project card for Susan's column
 function ProjectCard({ project }: { project: Project }) {
+  const total = project.todos + project.knowledge + project.bugs;
   return (
-    <div className="p-2 rounded border border-gray-700 bg-gray-800/50">
-      <div className="font-medium text-white text-sm truncate">{project.name}</div>
-      <div className="flex items-center gap-3 mt-1 text-xs">
-        <span className="text-blue-400">
-          <span className="text-gray-500">Todos:</span> {project.todos || 0}
-        </span>
-        <span className="text-green-400">
-          <span className="text-gray-500">Knowledge:</span> {project.knowledge || 0}
-        </span>
-        <span className="text-red-400">
-          <span className="text-gray-500">Bugs:</span> {project.bugs || 0}
-        </span>
+    <div className="p-2 rounded border border-gray-700 bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
+      <div className="flex items-center justify-between">
+        <div className="font-medium text-white text-sm truncate">{project.name}</div>
+        {total > 0 && (
+          <span className="text-xs text-gray-400 ml-2">{total}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-4 mt-1.5 text-xs">
+        <div className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+          <span className={project.todos > 0 ? 'text-white' : 'text-gray-600'}>{project.todos}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-green-500"></span>
+          <span className={project.knowledge > 0 ? 'text-white' : 'text-gray-600'}>{project.knowledge}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-red-500"></span>
+          <span className={project.bugs > 0 ? 'text-white' : 'text-gray-600'}>{project.bugs}</span>
+        </div>
       </div>
     </div>
   );
