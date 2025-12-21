@@ -475,19 +475,16 @@ function ProjectCard({ project }: { project: Project }) {
           <span className="text-xs text-gray-400 ml-2">{total}</span>
         )}
       </div>
-      <div className="flex items-center gap-4 mt-1.5 text-xs">
-        <div className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-          <span className={project.todos > 0 ? 'text-white' : 'text-gray-600'}>{project.todos}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-green-500"></span>
-          <span className={project.knowledge > 0 ? 'text-white' : 'text-gray-600'}>{project.knowledge}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-red-500"></span>
-          <span className={project.bugs > 0 ? 'text-white' : 'text-gray-600'}>{project.bugs}</span>
-        </div>
+      <div className="flex items-center gap-3 mt-1.5 text-xs">
+        <span className={project.todos > 0 ? 'text-blue-400' : 'text-gray-600'}>
+          To-do: {project.todos}
+        </span>
+        <span className={project.knowledge > 0 ? 'text-green-400' : 'text-gray-600'}>
+          Knowledge: {project.knowledge}
+        </span>
+        <span className={project.bugs > 0 ? 'text-red-400' : 'text-gray-600'}>
+          Bugs: {project.bugs}
+        </span>
       </div>
     </div>
   );
