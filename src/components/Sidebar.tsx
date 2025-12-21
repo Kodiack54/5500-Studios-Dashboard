@@ -216,6 +216,17 @@ export default function Sidebar() {
               <span>🎯</span>
               <span>Session Logs</span>
             </Link>
+            <Link
+              href="/project-management"
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname?.startsWith('/project-management')
+                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              <span>📁</span>
+              <span>Projects</span>
+            </Link>
           </div>
         )}
 
