@@ -36,6 +36,7 @@ interface Session {
   ended_at?: string;
   terminal_port?: number;
   status?: string;
+  source_type?: string;
   source_name?: string;
   project_path?: string;
 }
@@ -104,9 +105,9 @@ export default function SessionLogsPage() {
             return {
               id: team.id,
               status: {
-                captured: (s.active || 0) + (s.captured || 0),
-                flagged: s.flagged || 0,
-                filed: (s.pending || 0) + (s.cleaned || 0) + (s.archived || 0),
+                captured: Number(s.active || 0) + Number(s.captured || 0),
+                flagged: Number(s.flagged || 0),
+                filed: Number(s.pending || 0) + Number(s.cleaned || 0) + Number(s.archived || 0),
               }
             };
           }
@@ -141,14 +142,14 @@ export default function SessionLogsPage() {
   // Pipeline totals from database stats
   // Flow: active → captured → flagged → pending → cleaned → archived
   const totals = {
-    active: stats?.active || buckets['active'] || 0,
-    captured: stats?.captured || buckets['captured'] || 0,
-    flagged: stats?.flagged || buckets['flagged'] || 0,
-    pending: stats?.pending || buckets['pending'] || 0,
-    cleaned: stats?.cleaned || buckets['cleaned'] || 0,
-    archived: stats?.archived || buckets['archived'] || 0,
-    total: stats?.total_sessions || Object.values(buckets).reduce((sum, c) => sum + c, 0),
-    last24h: stats?.last_24h || 0,
+    active: Number(stats?.active || buckets['active'] || 0),
+    captured: Number(stats?.captured || buckets['captured'] || 0),
+    flagged: Number(stats?.flagged || buckets['flagged'] || 0),
+    pending: Number(stats?.pending || buckets['pending'] || 0),
+    cleaned: Number(stats?.cleaned || buckets['cleaned'] || 0),
+    archived: Number(stats?.archived || buckets['archived'] || 0),
+    total: Number(stats?.total_sessions || Object.values(buckets).reduce((sum, c) => sum + Number(c), 0)),
+    last24h: Number(stats?.last_24h || 0),
   };
 
   const overallHealth = error ? 'down' : 'healthy';
@@ -328,8 +329,32 @@ function TotalStat({ label, value, color }: { label: string; value: number; colo
 
 // Session list item
 function SessionItem({ session }: { session: Session }) {
-  const time = session.started_at ? formatTime(session.started_at) : '??:??';
-  const user = session.user_name || session.user_id || 'Unknown';
+  const datetime = session.started_at ? formatDateTime(session.started_at) : '??:??';
+
+  // Display logic: prefer source_name for AI sessions, user_name for humans
+  const getDisplayName = () => {
+    // If it's an AI session, show the source
+    if (session.source_type === 'internal_claude') {
+      return 'Internal Claude';
+    }
+    if (session.source_type === 'external' || session.source_name?.includes('claude')) {
+      return 'External Claude';
+    }
+    // Otherwise show user name or fall back
+    if (session.user_name && session.user_name.trim()) {
+      return session.user_name;
+    }
+    if (session.source_name && session.source_name.trim()) {
+      return session.source_name;
+    }
+    // Don't show raw UUIDs
+    if (session.user_id && !session.user_id.includes('-')) {
+      return session.user_id;
+    }
+    return 'Unknown';
+  };
+
+  const user = getDisplayName();
 
   // Pipeline: active → captured → flagged → pending → cleaned → archived
   const statusColors: Record<string, string> = {
@@ -345,7 +370,7 @@ function SessionItem({ session }: { session: Session }) {
     <div className="p-2 rounded border border-gray-700 bg-gray-800/50 text-sm">
       <div className="flex items-center justify-between">
         <span className="font-medium text-white truncate">{user}</span>
-        <span className="text-[10px] text-gray-500 font-mono shrink-0 ml-2">{time}</span>
+        <span className="text-[10px] text-gray-500 font-mono shrink-0 ml-2">{datetime}</span>
       </div>
       <div className="flex items-center justify-between mt-1">
         <span className="text-xs text-gray-500 truncate">{session.project_path || session.source_name || 'Unknown'}</span>
@@ -399,7 +424,23 @@ function HealthBadge({ health }: { health: 'healthy' | 'degraded' | 'down' }) {
   );
 }
 
-function formatTime(dateStr: string): string {
+function formatDateTime(dateStr: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const isToday = date.toDateString() === today.toDateString();
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  if (isToday) {
+    return `Today ${time}`;
+  } else if (isYesterday) {
+    return `Yesterday ${time}`;
+  } else {
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${dateStr} ${time}`;
+  }
 }
