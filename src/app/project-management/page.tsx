@@ -2,7 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Plus, ArrowLeft, ChevronRight, ChevronDown, Settings, GripVertical } from 'lucide-react';
+import { Plus, ArrowLeft, ChevronRight, ChevronDown, Settings, GripVertical, Building2 } from 'lucide-react';
+import { useClient } from '@/app/contexts/ClientContext';
 import { Project, TabType, TABS } from './types';
 import ProjectHeader from './components/ProjectHeader';
 import ProjectTabs from './components/ProjectTabs';
@@ -69,8 +70,9 @@ function ProjectManagementContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectSlug = searchParams.get('project');
+  const { selectedClient } = useClient();
 
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('todos');
   const [isLoading, setIsLoading] = useState(true);
@@ -80,6 +82,11 @@ function ProjectManagementContent() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [projectStats, setProjectStats] = useState<Record<string, ProjectStats>>({});
+
+  // Filter projects by selected client
+  const projects = selectedClient
+    ? allProjects.filter(p => p.client_id === selectedClient.id)
+    : allProjects;
 
   // Stats type
   interface ProjectStats {
@@ -140,7 +147,7 @@ function ProjectManagementContent() {
       const response = await fetch('/project-management/api/projects');
       const data = await response.json();
       if (data.success) {
-        setProjects(data.projects);
+        setAllProjects(data.projects);
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -688,7 +695,15 @@ function ProjectManagementContent() {
       <div className="bg-gray-800 border-b border-gray-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">Project Management</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-white">Project Management</h1>
+              {selectedClient && (
+                <span className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-lg text-sm flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  {selectedClient.name}
+                </span>
+              )}
+            </div>
             <p className="text-gray-400 text-sm mt-1">
               {parentProjects.length} parent{parentProjects.length !== 1 ? 's' : ''} · {childProjects.length + orphanProjects.length} project{(childProjects.length + orphanProjects.length) !== 1 ? 's' : ''}
             </p>

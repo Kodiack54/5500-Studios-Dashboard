@@ -6,6 +6,7 @@ import Navigation from "@/components/Navigation";
 import Sidebar from "@/components/Sidebar";
 import { UserProvider } from "@/app/settings/UserContext";
 import { DeveloperProvider } from "@/app/contexts/DeveloperContext";
+import { ClientProvider } from "@/app/contexts/ClientContext";
 import { createContext, useState, ReactNode, Suspense } from "react";
 import { usePathname } from "next/navigation";
 
@@ -62,9 +63,10 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <UserProvider>
           <DeveloperProvider>
-            <PageTitleContext.Provider value={setPageTitle}>
-              <PageActionsContext.Provider value={setPageActions}>
-                <ProductionStatusContext.Provider value={{
+            <ClientProvider>
+              <PageTitleContext.Provider value={setPageTitle}>
+                <PageActionsContext.Provider value={setPageActions}>
+                  <ProductionStatusContext.Provider value={{
                   showServers,
                   setShowServers,
                   toggleServers: () => setShowServers(prev => !prev),
@@ -84,8 +86,9 @@ export default function RootLayout({
                     </div>
                   </div>
                 </ProductionStatusContext.Provider>
-              </PageActionsContext.Provider>
-            </PageTitleContext.Provider>
+                </PageActionsContext.Provider>
+              </PageTitleContext.Provider>
+            </ClientProvider>
           </DeveloperProvider>
         </UserProvider>
       </body>

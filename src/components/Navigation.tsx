@@ -3,23 +3,14 @@
 import { useState, useContext, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, DoorOpen, Monitor, Users, Wrench, LayoutGrid, Zap, ArrowLeft, Server } from 'lucide-react';
+import { ChevronDown, ChevronRight, DoorOpen, Users, ArrowLeft, Building2 } from 'lucide-react';
 import TimeClockDropdown from './TimeClockDropdown';
 import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
 import AITeamChat from './AITeamChat';
 import { ProductionStatusContext } from '@/app/layout';
-// Dev team selector removed - now only in Studio page
+import { useClient } from '@/app/contexts/ClientContext';
 import { supabase } from '../lib/supabase';
-
-// Project definitions for the switcher
-const projects = [
-  { id: 'dev-command', name: 'Dev Command Center', icon: Monitor, color: 'text-blue-400' },
-  { id: 'nextbid-portal', name: 'NextBid Portal', icon: Users, color: 'text-green-400' },
-  { id: 'nextbidder', name: 'NextBidder', icon: LayoutGrid, color: 'text-purple-400' },
-  { id: 'nextsource', name: 'NextSource', icon: Wrench, color: 'text-orange-400' },
-  { id: 'nexttech', name: 'NextTech', icon: Zap, color: 'text-pink-400' },
-];
 
 interface NavigationProps {
   pageTitle?: { title: string; description: string };
@@ -30,8 +21,8 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
   const pathname = usePathname();
   const router = useRouter();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [selectedProject, setSelectedProject] = useState(projects[0]);
   const { showServers, toggleServers } = useContext(ProductionStatusContext);
+  const { clients, selectedClient, setSelectedClient, isLoading: clientsLoading } = useClient();
 
   // Tab navigation - exactly like MyKeystone style
   // Tabs: Servers / Dev Tools / HelpDesk / Calendar / Development
@@ -78,22 +69,10 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
     router.push('/');
   }
 
-  function handleProjectChange(projectId: string) {
-    const project = projects.find(p => p.id === projectId);
-    if (project) {
-      setSelectedProject(project);
-      // Navigate to external URLs for other projects
-      if (projectId === 'dev-command') {
-        router.push('/dashboard');
-      } else if (projectId === 'nextbid-portal') {
-        window.open('http://146.190.169.112:8004', '_blank');
-      } else if (projectId === 'nextbidder') {
-        window.open('http://146.190.169.112:8001', '_blank');
-      } else if (projectId === 'nextsource') {
-        window.open('http://146.190.169.112:8003', '_blank');
-      } else if (projectId === 'nexttech') {
-        window.open('http://146.190.169.112:8002', '_blank');
-      }
+  function handleClientChange(clientId: string) {
+    const client = clients.find(c => c.id === clientId);
+    if (client) {
+      setSelectedClient(client);
     }
   }
 
@@ -149,20 +128,28 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
               </div>
             </div>
 
-            {/* Right: Project Selector, Time Clock, Settings, Logout */}
+            {/* Right: Client Selector, Time Clock, Settings, Logout */}
             <div className="flex items-center space-x-2">
-              {/* Project Selector - EXACT same style as MyKeystone company selector */}
+              {/* Client Selector */}
               <div className="relative">
                 <select
-                  value={selectedProject.id}
-                  onChange={(e) => handleProjectChange(e.target.value)}
-                  className="appearance-none bg-gray-700 text-white pl-10 pr-10 py-2 rounded-xl border border-gray-600 focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-600"
+                  value={selectedClient?.id || 'all'}
+                  onChange={(e) => {
+                    if (e.target.value === 'all') {
+                      setSelectedClient(null);
+                    } else {
+                      handleClientChange(e.target.value);
+                    }
+                  }}
+                  disabled={clientsLoading}
+                  className="appearance-none bg-gray-700 text-white pl-10 pr-10 py-2 rounded-xl border border-gray-600 focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-600 disabled:opacity-50"
                 >
-                  {projects.map(project => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
+                  <option value="all">All Clients</option>
+                  {clients.map(client => (
+                    <option key={client.id} value={client.id}>{client.name}</option>
                   ))}
                 </select>
-                <Monitor className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                 <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               </div>
 
