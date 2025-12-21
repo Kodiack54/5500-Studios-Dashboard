@@ -6,6 +6,28 @@ import { RefreshCw, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 // ALL data comes from DATABASE - no HTTP calls to workers
 // Workers write TO database, dashboard reads FROM database
 
+// All 4 team workspaces
+const TEAMS = [
+  { id: 'global', name: 'Global Team', workspace: 'global' },
+  { id: 'dev1', name: 'Dev Team 1', workspace: 'dev1' },
+  { id: 'dev2', name: 'Dev Team 2', workspace: 'dev2' },
+  { id: 'dev3', name: 'Dev Team 3', workspace: 'dev3' },
+];
+
+// Jen's 20 extraction buckets
+const JEN_BUCKETS = [
+  'Bugs Open', 'Bugs Fixed', 'Todos', 'Journal', 'Work Log', 'Ideas',
+  'Decisions', 'Lessons', 'System Breakdown', 'How-To Guide', 'Schematic',
+  'Reference', 'Naming Conventions', 'File Structure', 'Database Patterns',
+  'API Patterns', 'Component Patterns', 'Quirks & Gotchas', 'Snippets', 'Other'
+];
+
+interface TeamStatus {
+  captured: number;
+  flagged: number;
+  filed: number;
+}
+
 interface Session {
   id: string;
   user_name?: string;
@@ -39,6 +61,7 @@ export default function SessionLogsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [buckets, setBuckets] = useState<BucketCounts>({});
   const [stats, setStats] = useState<DatabaseStats | null>(null);
+  const [teamStatuses, setTeamStatuses] = useState<Record<string, TeamStatus>>({});
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +72,7 @@ export default function SessionLogsPage() {
     setError(null);
 
     try {
+      // Fetch sessions and global buckets
       const [sessionsRes, bucketsRes] = await Promise.all([
         fetch('/api/ai-sessions?limit=100', { cache: 'no-store' }),
         fetch('/api/ai-sessions/buckets', { cache: 'no-store' }),
@@ -69,6 +93,31 @@ export default function SessionLogsPage() {
         setBuckets(bucketsData.buckets || {});
         setStats(bucketsData.stats || null);
       }
+
+      // Fetch each team's stats
+      const teamPromises = TEAMS.map(async (team) => {
+        try {
+          const res = await fetch(`/api/ai-sessions/buckets?workspace=${team.workspace}`, { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            const s = data.stats || {};
+            return {
+              id: team.id,
+              status: {
+                captured: (s.active || 0) + (s.captured || 0),
+                flagged: s.flagged || 0,
+                filed: (s.pending || 0) + (s.cleaned || 0) + (s.archived || 0),
+              }
+            };
+          }
+        } catch {}
+        return { id: team.id, status: { captured: 0, flagged: 0, filed: 0 } };
+      });
+
+      const teamResults = await Promise.all(teamPromises);
+      const statusMap: Record<string, TeamStatus> = {};
+      teamResults.forEach(r => { statusMap[r.id] = r.status; });
+      setTeamStatuses(statusMap);
 
       setLastRefresh(new Date());
     } catch (err) {
@@ -137,68 +186,114 @@ export default function SessionLogsPage() {
         </div>
       )}
 
-      {/* Pipeline Status Bar */}
-      {/* Flow: active → captured → flagged → pending → cleaned → archived */}
-      <div className="px-6 py-3 bg-gray-800/50 border-b border-gray-700 shrink-0">
-        <div className="flex items-center justify-around">
-          <TotalStat label="Active" value={totals.active} color="cyan" />
-          <PipelineArrow />
-          <TotalStat label="Captured" value={totals.captured} color="blue" />
-          <PipelineArrow />
-          <TotalStat label="Flagged" value={totals.flagged} color="purple" />
-          <PipelineArrow />
-          <TotalStat label="Pending" value={totals.pending} color="yellow" />
-          <PipelineArrow />
-          <TotalStat label="Cleaned" value={totals.cleaned} color="teal" />
-          <PipelineArrow />
-          <TotalStat label="Archived" value={totals.archived} color="green" />
-        </div>
-        <div className="text-center mt-2 text-xs text-gray-500">
-          {totals.total} total sessions | {totals.last24h} in last 24h
+      {/* Team Summary Cards */}
+      <div className="p-4 bg-gray-850 border-b border-gray-700 shrink-0">
+        <div className="grid grid-cols-4 gap-4">
+          {TEAMS.map(team => {
+            const status = teamStatuses[team.id] || { captured: 0, flagged: 0, filed: 0 };
+            return (
+              <div key={team.id} className="p-3 rounded-lg border border-gray-700 bg-gray-800/50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-white">{team.name}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <div className="text-lg font-bold text-blue-400">{status.captured}</div>
+                    <div className="text-[10px] text-gray-500">Captured</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-purple-400">{status.flagged}</div>
+                    <div className="text-[10px] text-gray-500">Flagged</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-green-400">{status.filed}</div>
+                    <div className="text-[10px] text-gray-500">Filed</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Main Content - 2 Column Layout */}
+      {/* Main Content - 3/4 left, 1/4 right */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left: Sessions List */}
-        <div className="flex-1 flex flex-col border-r border-gray-700 min-w-0">
-          <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 shrink-0">
-            <h2 className="text-sm font-medium text-gray-300">Recent Sessions ({sessions.length})</h2>
+        {/* Left 3/4: Pipeline section */}
+        <div className="flex-[3] flex flex-col border-r border-gray-700 min-w-0">
+          {/* Pipeline Status Header - spans full 3/4 width */}
+          <div className="px-4 py-3 bg-gray-800/50 border-b border-gray-700 shrink-0">
+            <div className="flex items-center justify-around">
+              <TotalStat label="Active" value={totals.active} color="cyan" />
+              <PipelineArrow />
+              <TotalStat label="Captured" value={totals.captured} color="blue" />
+              <PipelineArrow />
+              <TotalStat label="Flagged" value={totals.flagged} color="purple" />
+              <PipelineArrow />
+              <TotalStat label="Pending" value={totals.pending} color="yellow" />
+              <PipelineArrow />
+              <TotalStat label="Cleaned" value={totals.cleaned} color="teal" />
+              <PipelineArrow />
+              <TotalStat label="Archived" value={totals.archived} color="green" />
+            </div>
+            <div className="text-center mt-2 text-xs text-gray-500">
+              {totals.total} total sessions | {totals.last24h} in last 24h
+            </div>
           </div>
-          <div className="flex-1 overflow-auto p-3 space-y-2">
-            {sessions.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <div className="text-3xl mb-2">📭</div>
-                <p>No sessions in database</p>
+
+          {/* Below header: Sessions (2/3) and Pipeline Buckets (1/3) side by side */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Sessions - 2/3 of 3/4 section */}
+            <div className="flex-[2] flex flex-col border-r border-gray-700 min-w-0">
+              <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 shrink-0">
+                <h2 className="text-sm font-medium text-gray-300">Recent Sessions ({sessions.length})</h2>
               </div>
-            ) : (
-              sessions.map(session => (
-                <SessionItem key={session.id} session={session} />
-              ))
-            )}
+              <div className="flex-1 overflow-auto p-3 space-y-2">
+                {sessions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="text-3xl mb-2">📭</div>
+                    <p>No sessions in database</p>
+                  </div>
+                ) : (
+                  sessions.map(session => (
+                    <SessionItem key={session.id} session={session} />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Pipeline Buckets - 1/3 of 3/4 section */}
+            <div className="flex-1 flex flex-col min-w-0">
+              <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 shrink-0">
+                <h2 className="text-sm font-medium text-gray-300">Pipeline Status</h2>
+              </div>
+              <div className="flex-1 overflow-auto p-3">
+                <div className="space-y-1">
+                  {Object.entries(buckets)
+                    .filter(([name]) => ['active', 'captured', 'flagged', 'pending', 'cleaned', 'archived'].includes(name))
+                    .sort((a, b) => {
+                      const order = ['active', 'captured', 'flagged', 'pending', 'cleaned', 'archived'];
+                      return order.indexOf(a[0]) - order.indexOf(b[0]);
+                    })
+                    .map(([name, count]) => (
+                      <BucketRow key={name} name={name} count={count} />
+                    ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Right: Status Buckets */}
-        <div className="w-80 flex flex-col min-w-0">
+        {/* Right 1/4: Jen's 20 Buckets */}
+        <div className="flex-1 flex flex-col min-w-0">
           <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 shrink-0">
-            <h2 className="text-sm font-medium text-gray-300">Pipeline Buckets</h2>
+            <h2 className="text-sm font-medium text-gray-300">Flagged Buckets (All Teams)</h2>
           </div>
           <div className="flex-1 overflow-auto p-3">
-            {Object.keys(buckets).length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <div className="text-3xl mb-2">🗂️</div>
-                <p>No bucket data</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {Object.entries(buckets)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([name, count]) => (
-                    <BucketRow key={name} name={name} count={count} />
-                  ))}
-              </div>
-            )}
+            <div className="space-y-1">
+              {JEN_BUCKETS.map(name => (
+                <BucketRow key={name} name={name} count={buckets[name] || 0} />
+              ))}
+            </div>
           </div>
         </div>
       </div>
