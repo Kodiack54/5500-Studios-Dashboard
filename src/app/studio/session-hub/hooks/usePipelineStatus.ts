@@ -11,11 +11,11 @@ import type {
   PipelineMetrics
 } from '../types';
 
-// Service URLs - using the dev droplet
+// Service URLs - using the dev droplet (Global AI Team ports: 5400-5407)
 const DEV_DROPLET = '161.35.229.220';
-const CHAD_URL = `http://${DEV_DROPLET}:5401`;
-const JEN_URL = `http://${DEV_DROPLET}:5407`;
-const SUSAN_URL = `http://${DEV_DROPLET}:5403`;
+const CHAD_URL = `http://${DEV_DROPLET}:5401`;   // 01 - Transcription & Capture
+const JEN_URL = `http://${DEV_DROPLET}:5402`;    // 02 - Scrubbing & Signal Extraction
+const SUSAN_URL = `http://${DEV_DROPLET}:5403`;  // 03 - Classification & Sorting
 
 const defaultChadStatus: ChadStatus = {
   isRunning: false,
@@ -290,8 +290,8 @@ export function usePipelineStatus(options: UsePipelineStatusOptions = {}) {
     setLoading(false);
   }, [fetchChadStatus, fetchJenStatus, fetchSusanStatus, fetchBuckets, fetchSessions, calculateHealth]);
 
-  // Trigger a specific worker
-  const triggerWorker = useCallback(async (worker: 'chad' | 'jen' | 'susan') => {
+  // Trigger a specific team member
+  const triggerTeamMember = useCallback(async (member: 'chad' | 'jen' | 'susan') => {
     const urls: Record<string, string> = {
       chad: CHAD_URL,
       jen: JEN_URL,
@@ -299,15 +299,15 @@ export function usePipelineStatus(options: UsePipelineStatusOptions = {}) {
     };
 
     try {
-      const res = await fetch(`${urls[worker]}/api/trigger`, { method: 'POST' });
+      const res = await fetch(`${urls[member]}/api/trigger`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) {
-        console.error(`Failed to trigger ${worker}:`, data.error);
+        console.error(`Failed to trigger ${member}:`, data.error);
       }
       // Refresh after trigger
       setTimeout(refreshAll, 1000);
     } catch (error) {
-      console.error(`Failed to trigger ${worker}:`, error);
+      console.error(`Failed to trigger ${member}:`, error);
     }
   }, [refreshAll]);
 
@@ -345,7 +345,7 @@ export function usePipelineStatus(options: UsePipelineStatusOptions = {}) {
     totalPending,
     bucketDelta: bucketDelta(),
     loading,
-    triggerWorker,
+    triggerTeamMember,
     refreshAll,
   };
 }

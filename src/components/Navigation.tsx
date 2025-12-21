@@ -9,7 +9,7 @@ import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
 import AITeamChat from './AITeamChat';
 import { ProductionStatusContext } from '@/app/layout';
-import { useDeveloper, DEVELOPER_TEAMS } from '@/app/contexts/DeveloperContext';
+// Dev team selector removed - now only in Studio page
 import { supabase } from '../lib/supabase';
 
 // Project definitions for the switcher
@@ -32,7 +32,6 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [selectedProject, setSelectedProject] = useState(projects[0]);
   const { showServers, toggleServers } = useContext(ProductionStatusContext);
-  const { selectedTeam, selectTeamById, connectionStatus } = useDeveloper();
 
   // Tab navigation - exactly like MyKeystone style
   // Tabs: Servers / Dev Tools / HelpDesk / Calendar / Development
@@ -196,24 +195,6 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
       <div className="shadow-md" style={{ background: 'linear-gradient(to right, #3B82F6, #06B6D4)' }}>
         <div className="px-6 py-1">
           <div className="flex items-center">
-            {/* Left: Developer Selector */}
-            <div className="w-48 flex items-center justify-start mr-4">
-              <select
-                value={selectedTeam.id}
-                onChange={(e) => selectTeamById(e.target.value)}
-                disabled={connectionStatus === 'connected'}
-                className={`w-full bg-gray-800/80 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/30 ${
-                  connectionStatus === 'connected' ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {DEVELOPER_TEAMS.map(team => (
-                  <option key={team.id} value={team.id}>
-                    {team.label} ({team.portRange})
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Back button + Page title + Page actions */}
             <div className="flex-1 flex items-center space-x-3">
               {/* Back Button */}

@@ -3,18 +3,19 @@
 /**
  * Studio Page - Development Environment
  * Includes browser preview with project/environment selection
- * and Claude terminals for AI workers
+ * and Claude terminals for AI team
  */
 
 import { useState, useEffect, useContext } from 'react';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
-import { useDeveloper } from '@/app/contexts/DeveloperContext';
-import { useUser } from '@/app/settings/UserContext';
+import { useDeveloper, DEVELOPER_TEAMS } from '@/app/contexts/DeveloperContext';
+import { useUser, useMinRole } from '@/app/settings/UserContext';
+import { Lock } from 'lucide-react';
 import { DraggableSidebar, SidebarItem } from './components';
 import BrowserPage from './browser/BrowserPage';
 import ClaudeTerminal from './terminal/ClaudeTerminal';
 import { SessionHubPage } from './session-hub';
-import { Plug, PlugZap } from 'lucide-react';
+import { Plug, PlugZap, Monitor } from 'lucide-react';
 import type { Project, Environment } from '@/types';
 import { ENVIRONMENTS } from '@/types';
 
@@ -36,8 +37,9 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
 export default function StudioPage() {
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
-  const { selectedTeam, connectionStatus, connect, disconnect } = useDeveloper();
+  const { selectedTeam, selectTeamById, connectionStatus, connect, disconnect } = useDeveloper();
   const { user } = useUser();
+  const isEngineer = useMinRole('engineer');
   const [activePanel, setActivePanel] = useState<string | null>('browser');
 
   // Project and environment state
@@ -45,6 +47,28 @@ export default function StudioPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedEnv, setSelectedEnv] = useState<Environment>(ENVIRONMENTS[0]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+
+  // Locked teams state - shows which teams are in use by other users
+  const [lockedTeams, setLockedTeams] = useState<Record<string, { userId: string; userName: string; since: string }>>({});
+
+  // Fetch locked teams status
+  useEffect(() => {
+    async function fetchLockedTeams() {
+      try {
+        const res = await fetch('/api/dev-session/status');
+        const data = await res.json();
+        if (data.success && data.lockedTeams) {
+          setLockedTeams(data.lockedTeams);
+        }
+      } catch (error) {
+        console.error('Failed to fetch locked teams:', error);
+      }
+    }
+    fetchLockedTeams();
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchLockedTeams, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch projects on mount
   useEffect(() => {
@@ -120,6 +144,129 @@ export default function StudioPage() {
     };
   }, [setPageTitle, setPageActions, projects, selectedProject, selectedEnv, isLoadingProjects]);
 
+  // Show access restricted for non-engineers
+  if (!isEngineer) {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-900">
+        <div className="text-center">
+          <Lock className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-white mb-2">Access Restricted</h2>
+          <p className="text-gray-400">Engineer+ access required for the Dev Studio Environment.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show connection modal when not connected
+  if (connectionStatus !== 'connected') {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-900">
+        <div className="max-w-lg w-full mx-4">
+          {/* Modal Card */}
+          <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-6 text-center border-b border-gray-700" style={{ background: 'linear-gradient(to right, #3B82F6, #06B6D4)' }}>
+              <Monitor className="w-12 h-12 text-white mx-auto mb-3" />
+              <h2 className="text-xl font-bold text-white">Welcome to Studio</h2>
+              <p className="text-white/80 text-sm mt-1">Select your dev team and connect to begin</p>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Dev Team Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Select Development Team</label>
+                <div className="space-y-2">
+                  {DEVELOPER_TEAMS.map((team, index) => {
+                    const lockInfo = lockedTeams[team.id];
+                    const isLockedByOther = lockInfo && lockInfo.userId !== user?.id;
+                    const isLockedByMe = lockInfo && lockInfo.userId === user?.id;
+
+                    return (
+                      <button
+                        key={team.id}
+                        onClick={() => !isLockedByOther && selectTeamById(team.id)}
+                        disabled={isLockedByOther}
+                        className={`w-full p-3 rounded-lg border text-left transition-all flex items-center justify-between ${
+                          isLockedByOther
+                            ? 'border-red-800/50 bg-red-900/20 cursor-not-allowed opacity-60'
+                            : selectedTeam.id === team.id
+                            ? 'border-cyan-500 bg-cyan-500/20'
+                            : 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                            isLockedByOther
+                              ? 'bg-red-800/50 text-red-300'
+                              : selectedTeam.id === team.id
+                              ? 'bg-cyan-500 text-white'
+                              : 'bg-gray-600 text-gray-300'
+                          }`}>
+                            {isLockedByOther ? <Lock className="w-4 h-4" /> : index + 1}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className={`font-medium ${
+                              isLockedByOther
+                                ? 'text-red-400'
+                                : selectedTeam.id === team.id
+                                ? 'text-cyan-400'
+                                : 'text-gray-300'
+                            }`}>
+                              Development Team {index + 1}
+                            </span>
+                            {isLockedByOther && (
+                              <span className="text-xs text-red-400/70">
+                                Locked by {lockInfo.userName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {isLockedByOther ? (
+                          <span className="text-red-400 text-xs">In Use</span>
+                        ) : isLockedByMe ? (
+                          <span className="text-green-400 text-xs">Your Session</span>
+                        ) : selectedTeam.id === team.id ? (
+                          <span className="text-cyan-400 text-sm">Selected</span>
+                        ) : (
+                          <span className="text-green-400 text-xs">Available</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Connect Button */}
+              <button
+                onClick={() => user?.id && connect(user.id)}
+                disabled={!user?.id || connectionStatus === 'connecting'}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {connectionStatus === 'connecting' ? (
+                  <>
+                    <Plug className="w-5 h-5 animate-pulse" />
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <PlugZap className="w-5 h-5" />
+                    <span>Connect to Development Team {selectedTeam.id.replace('dev', '')}</span>
+                  </>
+                )}
+              </button>
+
+              {/* Info */}
+              <p className="text-center text-gray-500 text-xs">
+                Your session will be logged for {user?.name || 'your account'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex bg-gray-900">
       {/* Icon Sidebar */}
@@ -151,65 +298,30 @@ export default function StudioPage() {
 
         {/* Right: Claude Terminal area */}
         <div className="w-[400px] bg-gray-850 flex flex-col flex-shrink-0">
-          {/* Blue header bar with Connect button */}
+          {/* Blue header bar with Disconnect button */}
           <div className="h-10 flex items-center justify-between px-3" style={{ background: 'linear-gradient(to right, #3B82F6, #06B6D4)' }}>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-white">AI Workers</span>
+              <span className="text-sm font-medium text-white">AI Team</span>
               <span className="text-xs text-white/70">({selectedTeam.portRange})</span>
             </div>
 
-            {/* Connect/Disconnect Button */}
-            {connectionStatus === 'connected' ? (
-              <button
-                onClick={disconnect}
-                className="flex items-center gap-2 px-3 py-1 bg-green-500/30 text-white border border-white/30 rounded-lg hover:bg-green-500/40 transition-colors"
-              >
-                <PlugZap className="w-4 h-4" />
-                <span className="text-sm font-medium">Connected</span>
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              </button>
-            ) : connectionStatus === 'connecting' ? (
-              <button
-                disabled
-                className="flex items-center gap-2 px-3 py-1 bg-yellow-500/30 text-white border border-white/30 rounded-lg cursor-wait"
-              >
-                <Plug className="w-4 h-4 animate-pulse" />
-                <span className="text-sm font-medium">Connecting...</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => user?.id && connect(user.id)}
-                disabled={!user?.id}
-                className="flex items-center gap-2 px-3 py-1 bg-gray-800 text-white border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
-              >
-                <Plug className="w-4 h-4" />
-                <span className="text-sm font-medium">Connect</span>
-              </button>
-            )}
+            <button
+              onClick={disconnect}
+              className="flex items-center gap-2 px-3 py-1 bg-green-500/30 text-white border border-white/30 rounded-lg hover:bg-red-500/30 hover:border-red-400/50 transition-colors"
+            >
+              <PlugZap className="w-4 h-4" />
+              <span className="text-sm font-medium">Connected</span>
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            </button>
           </div>
 
           {/* Terminal content */}
-          {connectionStatus === 'connected' ? (
-            <div className="flex-1 min-h-0 flex flex-col">
-              <ClaudeTerminal
-                port={selectedTeam.basePort}
-                projectPath={selectedProject?.server_path || '/var/www/NextBid_Dev/dev-studio-5000'}
-              />
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center bg-gray-900">
-              <div className="text-center px-6">
-                <div className="text-4xl mb-4">🔌</div>
-                <h3 className="text-white font-medium mb-2">Not Connected</h3>
-                <p className="text-gray-400 text-sm mb-4">
-                  Click <span className="text-cyan-400 font-medium">Connect</span> above to start your AI worker session.
-                </p>
-                <p className="text-gray-500 text-xs">
-                  {selectedTeam.label} ({selectedTeam.portRange})
-                </p>
-              </div>
-            </div>
-          )}
+          <div className="flex-1 min-h-0 flex flex-col">
+            <ClaudeTerminal
+              port={selectedTeam.basePort}
+              projectPath={selectedProject?.server_path || '/var/www/NextBid_Dev/dev-studio-5000'}
+            />
+          </div>
         </div>
       </div>
     </div>

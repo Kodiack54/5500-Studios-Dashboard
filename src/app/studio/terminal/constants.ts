@@ -1,9 +1,9 @@
 // Terminal configuration constants
 
-// AI Team worker URLs (Development droplet)
+// AI Team URLs (Development droplet - Global ports 5400-5407)
 export const DEV_DROPLET = '161.35.229.220';
-export const CHAD_WS_URL = `ws://${DEV_DROPLET}:5401/ws`; // WebSocket path for Chad
-export const SUSAN_URL = `http://${DEV_DROPLET}:5403`;
+export const CHAD_WS_URL = `ws://${DEV_DROPLET}:5401/ws`; // 01 - WebSocket path for Chad
+export const SUSAN_URL = `http://${DEV_DROPLET}:5403`;    // 03 - Classification & Sorting
 
 // Chunk size for long messages
 export const CHUNK_SIZE = 1000;

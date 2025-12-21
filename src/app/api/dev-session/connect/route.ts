@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-// AI Worker definitions matching the frontend
-const AI_WORKERS = [
+// Kodiack AI Team definitions matching the frontend
+const KODIACK_AI_TEAM = [
   { name: 'Claude', role: 'Lead Developer', portOffset: 0 },
-  { name: 'Chad', role: 'Scribe', portOffset: 1 },
-  { name: 'Ryan', role: 'Project Manager', portOffset: 2 },
-  { name: 'Susan', role: 'Memory Manager', portOffset: 3 },
-  { name: 'Jen', role: 'Designer', portOffset: 4 },
-  { name: 'Clair', role: 'Code Reviewer', portOffset: 5 },
-  { name: 'Mike', role: 'QA Tester', portOffset: 6 },
+  { name: 'Chad', role: 'Transcription & Capture', portOffset: 1 },
+  { name: 'Jen', role: 'Scrubbing & Signal Extraction', portOffset: 2 },
+  { name: 'Susan', role: 'Classification & Sorting', portOffset: 3 },
+  { name: 'Clair', role: 'Conversion & Documentation', portOffset: 4 },
+  { name: 'Mike', role: 'QA Tester', portOffset: 5 },
+  { name: 'Tiffany', role: 'QA Tester', portOffset: 6 },
+  { name: 'Ryan', role: 'Roadmap & Prioritization', portOffset: 7 },
 ];
 
 /**
  * POST /api/dev-session/connect
- * Start a dev session - connects user to AI workers for their selected dev slot
+ * Start a dev session - connects user to AI team for their selected dev slot
  */
 export async function POST(request: NextRequest) {
   try {
@@ -62,22 +63,22 @@ export async function POST(request: NextRequest) {
       // Table might not exist yet - continue anyway for now
     }
 
-    // Build worker statuses (in a real impl, you'd check if workers are actually running)
-    const workerStatuses = AI_WORKERS.map(worker => ({
-      name: worker.name,
-      port: basePort + worker.portOffset,
+    // Build team member statuses (in a real impl, you'd check if team members are actually running)
+    const teamStatuses = KODIACK_AI_TEAM.map(member => ({
+      name: member.name,
+      port: basePort + member.portOffset,
       status: 'online' as const, // Assume online for now
     }));
 
-    console.log(`[DevSession] User ${userId} connected to ${devSlot} (ports ${basePort}-${basePort + 6})`);
+    console.log(`[DevSession] User ${userId} connected to ${devSlot} (ports ${basePort}-${basePort + 7})`);
 
     return NextResponse.json({
       success: true,
       sessionId,
       devSlot,
       basePort,
-      workerStatuses,
-      message: `Connected to ${devSlot} AI workers`,
+      teamStatuses,
+      message: `Connected to ${devSlot} AI team`,
     });
 
   } catch (error) {

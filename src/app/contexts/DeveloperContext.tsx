@@ -7,35 +7,36 @@ export interface DeveloperTeam {
   id: 'dev1' | 'dev2' | 'dev3';
   label: string;
   basePort: number;  // Base port for Claude terminal (5410, 5420, 5430)
-  portRange: string; // Display range (5410-5416, 5420-5426, 5430-5436)
+  portRange: string; // Display range (5410-5417, 5420-5427, 5430-5437)
 }
 
-// AI Worker definitions for each dev slot
-export interface AIWorker {
+// Kodiack AI Team member definitions for each dev slot
+export interface AITeamMember {
   name: string;
   role: string;
-  portOffset: number; // Added to basePort (0=Claude, 1=Chad, 2=Ryan, 3=Susan, 4=Jen, 5=Clair, 6=Mike/Tiffany)
+  portOffset: number; // Added to basePort (0=Claude, 1=Chad, 2=Jen, 3=Susan, 4=Clair, 5=Mike, 6=Tiffany, 7=Ryan)
 }
 
-export const AI_WORKERS: AIWorker[] = [
+export const KODIACK_AI_TEAM: AITeamMember[] = [
   { name: 'Claude', role: 'Lead Developer', portOffset: 0 },
-  { name: 'Chad', role: 'Scribe', portOffset: 1 },
-  { name: 'Ryan', role: 'Project Manager', portOffset: 2 },
-  { name: 'Susan', role: 'Memory Manager', portOffset: 3 },
-  { name: 'Jen', role: 'Designer', portOffset: 4 },
-  { name: 'Clair', role: 'Code Reviewer', portOffset: 5 },
-  { name: 'Mike', role: 'QA Tester', portOffset: 6 },
+  { name: 'Chad', role: 'Transcription & Capture', portOffset: 1 },
+  { name: 'Jen', role: 'Scrubbing & Signal Extraction', portOffset: 2 },
+  { name: 'Susan', role: 'Classification & Sorting', portOffset: 3 },
+  { name: 'Clair', role: 'Conversion & Documentation', portOffset: 4 },
+  { name: 'Mike', role: 'QA Tester', portOffset: 5 },
+  { name: 'Tiffany', role: 'QA Tester', portOffset: 6 },
+  { name: 'Ryan', role: 'Roadmap & Prioritization', portOffset: 7 },
 ];
 
 export const DEVELOPER_TEAMS: DeveloperTeam[] = [
-  { id: 'dev1', label: 'Dev 1', basePort: 5410, portRange: '5410-5416' },
-  { id: 'dev2', label: 'Dev 2', basePort: 5420, portRange: '5420-5426' },
-  { id: 'dev3', label: 'Dev 3', basePort: 5430, portRange: '5430-5436' },
+  { id: 'dev1', label: 'Development Team 1', basePort: 5410, portRange: '5410-5417' },
+  { id: 'dev2', label: 'Development Team 2', basePort: 5420, portRange: '5420-5427' },
+  { id: 'dev3', label: 'Development Team 3', basePort: 5430, portRange: '5430-5437' },
 ];
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
-export interface WorkerStatus {
+export interface TeamMemberStatus {
   name: string;
   port: number;
   status: 'offline' | 'starting' | 'online' | 'error';
@@ -49,7 +50,7 @@ interface DeveloperContextValue {
 
   // Connection state
   connectionStatus: ConnectionStatus;
-  workerStatuses: WorkerStatus[];
+  teamStatuses: TeamMemberStatus[];
   lockedUserId: string | null;
   sessionId: string | null;
 
@@ -63,7 +64,7 @@ const DeveloperContext = createContext<DeveloperContextValue>({
   setSelectedTeam: () => {},
   selectTeamById: () => {},
   connectionStatus: 'disconnected',
-  workerStatuses: [],
+  teamStatuses: [],
   lockedUserId: null,
   sessionId: null,
   connect: async () => {},
@@ -73,7 +74,7 @@ const DeveloperContext = createContext<DeveloperContextValue>({
 export function DeveloperProvider({ children }: { children: ReactNode }) {
   const [selectedTeam, setSelectedTeam] = useState<DeveloperTeam>(DEVELOPER_TEAMS[0]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
-  const [workerStatuses, setWorkerStatuses] = useState<WorkerStatus[]>([]);
+  const [teamStatuses, setTeamStatuses] = useState<TeamMemberStatus[]>([]);
   const [lockedUserId, setLockedUserId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -93,16 +94,16 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
     setConnectionStatus('connecting');
     setLockedUserId(userId);
 
-    // Initialize worker statuses
-    const initialStatuses: WorkerStatus[] = AI_WORKERS.map(worker => ({
-      name: worker.name,
-      port: selectedTeam.basePort + worker.portOffset,
+    // Initialize team member statuses
+    const initialStatuses: TeamMemberStatus[] = KODIACK_AI_TEAM.map(member => ({
+      name: member.name,
+      port: selectedTeam.basePort + member.portOffset,
       status: 'starting',
     }));
-    setWorkerStatuses(initialStatuses);
+    setTeamStatuses(initialStatuses);
 
     try {
-      // Call API to start/connect workers for this dev slot
+      // Call API to start/connect AI team for this dev slot
       const response = await fetch('/api/dev-session/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,7 +118,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         setSessionId(data.sessionId);
-        setWorkerStatuses(data.workerStatuses || initialStatuses.map(w => ({ ...w, status: 'online' })));
+        setTeamStatuses(data.teamStatuses || initialStatuses.map(m => ({ ...m, status: 'online' })));
         setConnectionStatus('connected');
       } else {
         throw new Error(data.error || 'Failed to connect');
@@ -126,7 +127,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
       console.error('Failed to connect dev session:', error);
       setConnectionStatus('disconnected');
       setLockedUserId(null);
-      setWorkerStatuses([]);
+      setTeamStatuses([]);
     }
   }, [connectionStatus, selectedTeam]);
 
@@ -149,7 +150,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
     setConnectionStatus('disconnected');
     setLockedUserId(null);
     setSessionId(null);
-    setWorkerStatuses([]);
+    setTeamStatuses([]);
   }, [connectionStatus, sessionId, selectedTeam]);
 
   return (
@@ -158,7 +159,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
       setSelectedTeam,
       selectTeamById,
       connectionStatus,
-      workerStatuses,
+      teamStatuses,
       lockedUserId,
       sessionId,
       connect,

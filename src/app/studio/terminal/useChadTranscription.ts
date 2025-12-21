@@ -3,7 +3,7 @@
 import { useRef, useCallback } from 'react';
 import { DEV_DROPLET } from './constants';
 
-export function useChadTranscription(projectPath: string, userId?: string, chadPort: number = 5401) {
+export function useChadTranscription(projectPath: string, userId?: string, userName?: string, chadPort: number = 5401) {
   const chadWsRef = useRef<WebSocket | null>(null);
   const chadSessionIdRef = useRef<string | null>(null);
 
@@ -19,7 +19,7 @@ export function useChadTranscription(projectPath: string, userId?: string, chadP
       console.log('[ClaudeTerminal] Connecting to Chad at:', chadWsUrl);
 
       const chadWs = new WebSocket(
-        `${chadWsUrl}?project=${encodeURIComponent(projectPath)}&userId=${userId}`
+        `${chadWsUrl}?project=${encodeURIComponent(projectPath)}&userId=${userId}&userName=${encodeURIComponent(userName || '')}`
       );
 
       chadWs.onopen = () => {
@@ -49,7 +49,7 @@ export function useChadTranscription(projectPath: string, userId?: string, chadP
     } catch (err) {
       console.log('[ClaudeTerminal] Could not connect to Chad:', err);
     }
-  }, [projectPath, userId, chadPort]);
+  }, [projectPath, userId, userName, chadPort]);
 
   const sendToChad = useCallback((data: string) => {
     if (chadWsRef.current?.readyState === WebSocket.OPEN) {

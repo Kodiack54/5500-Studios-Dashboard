@@ -61,7 +61,7 @@ export function ClaudeTerminal({
     connectToChad,
     sendToChad,
     disconnect: disconnectChad,
-  } = useChadTranscription(projectPath, user?.id, chadPort);
+  } = useChadTranscription(projectPath, user?.id, user?.name, chadPort);
 
   const briefingSentToClaudeRef = useRef<boolean>(false);
   const claudeCodeLoadedRef = useRef<boolean>(false);
@@ -130,10 +130,10 @@ export function ClaudeTerminal({
         fitAddon.fit();
 
         term.writeln('\x1b[36m═══════════════════════════════════════════\x1b[0m');
-        term.writeln(`\x1b[36m   🤖 AI Worker Terminal (${port})            \x1b[0m`);
+        term.writeln(`\x1b[36m   🤖 AI Team Member Terminal (${port})       \x1b[0m`);
         term.writeln('\x1b[36m═══════════════════════════════════════════\x1b[0m');
         term.writeln('');
-        term.writeln('\x1b[33mClick "Connect" to start the AI worker\x1b[0m');
+        term.writeln('\x1b[33mClick "Connect" to start the AI team member\x1b[0m');
         term.writeln('');
 
         xtermRef.current = term;
@@ -189,7 +189,7 @@ export function ClaudeTerminal({
       if (xtermRef.current) {
         xtermRef.current.writeln('\x1b[32m[Connected]\x1b[0m');
         xtermRef.current.writeln('');
-        xtermRef.current.writeln('\x1b[36m☕ Hold please... your AI worker will be right with you.\x1b[0m');
+        xtermRef.current.writeln('\x1b[36m☕ Hold please... your AI team member will be right with you.\x1b[0m');
         xtermRef.current.writeln('\x1b[90m   Starting Claude Code...\x1b[0m');
 
         const context = await contextPromise;
