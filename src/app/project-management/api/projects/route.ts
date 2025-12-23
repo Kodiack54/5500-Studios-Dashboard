@@ -30,7 +30,15 @@ export async function GET(request: NextRequest) {
 
     const { data: projectsData, error: projectsError } = await query
       .order('sort_order', { ascending: true });
-    const projects = (projectsData || []) as Array<Record<string, unknown>>;
+
+    // Sort by is_main first (main projects at top), then by sort_order
+    const projects = ((projectsData || []) as Array<Record<string, unknown>>).sort((a, b) => {
+      // Main projects first
+      if (a.is_main && !b.is_main) return -1;
+      if (!a.is_main && b.is_main) return 1;
+      // Then by sort_order
+      return (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0);
+    });
 
     if (projectsError) {
       console.error('Error fetching projects:', projectsError);

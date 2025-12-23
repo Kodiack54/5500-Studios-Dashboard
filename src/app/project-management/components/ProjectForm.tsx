@@ -33,6 +33,7 @@ export default function ProjectForm({ project, onClose, onSave }: ProjectFormPro
     parent_id: project?.parent_id || '',
     is_parent: project?.is_parent ?? false,
     is_active: project?.is_active ?? true,
+    is_main: project?.is_main ?? false,
     droplet_name: project?.droplet_name || '',
     droplet_ip: project?.droplet_ip || '',
     server_path: project?.server_path || '',
@@ -104,6 +105,7 @@ export default function ProjectForm({ project, onClose, onSave }: ProjectFormPro
         client_id: formData.client_id || null,
         parent_id: formData.is_parent ? null : (formData.parent_id || null),
         is_parent: formData.is_parent,
+        is_main: formData.is_main,
         port_dev: formData.port_dev ? parseInt(formData.port_dev) : null,
         port_test: formData.port_test ? parseInt(formData.port_test) : null,
         port_prod: formData.port_prod ? parseInt(formData.port_prod) : null,
@@ -197,7 +199,7 @@ export default function ProjectForm({ project, onClose, onSave }: ProjectFormPro
               </div>
             )}
 
-            {/* Active & Is Parent Toggles */}
+            {/* Active, Is Parent & Is Main Toggles */}
             <div className="col-span-2 flex items-center gap-6">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -218,6 +220,16 @@ export default function ProjectForm({ project, onClose, onSave }: ProjectFormPro
                   className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-gray-400">Parent Project</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="is_main"
+                  checked={formData.is_main}
+                  onChange={handleChange}
+                  className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-yellow-600 focus:ring-yellow-500"
+                />
+                <span className="text-gray-400">Main (Top of List)</span>
               </label>
             </div>
 

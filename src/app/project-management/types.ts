@@ -20,6 +20,7 @@ export interface Project {
   build_number?: string;
   is_active: boolean;
   is_parent?: boolean;
+  is_main?: boolean;
   parent_id?: string;
   sort_order?: number;
   client_id?: string;
