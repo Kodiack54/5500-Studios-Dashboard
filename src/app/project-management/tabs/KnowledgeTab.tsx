@@ -26,6 +26,7 @@ interface JournalEntry {
 interface KnowledgeTabProps {
   projectPath: string;
   projectId: string;
+  projectName?: string;
   isParent?: boolean;
   childProjectIds?: string[];
 }
@@ -63,7 +64,7 @@ const TYPE_CONFIG = {
 
 type EntryType = keyof typeof TYPE_CONFIG;
 
-export default function KnowledgeTab({ projectPath, projectId, isParent, childProjectIds }: KnowledgeTabProps) {
+export default function KnowledgeTab({ projectPath, projectId, projectName, isParent, childProjectIds }: KnowledgeTabProps) {
   const [projectPaths, setProjectPaths] = useState<ProjectPath[]>([]);
   const [selectedPath, setSelectedPath] = useState<ProjectPath | null>(null);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -86,10 +87,10 @@ export default function KnowledgeTab({ projectPath, projectId, isParent, childPr
     fetchProjectPaths();
   }, [projectId]);
 
-  // Fetch journal when path changes
+  // Fetch knowledge when path changes
   useEffect(() => {
     if (selectedPath) {
-      fetchJournal(selectedPath.path);
+      fetchKnowledge(selectedPath.path);
     }
   }, [selectedPath]);
 
@@ -155,18 +156,18 @@ export default function KnowledgeTab({ projectPath, projectId, isParent, childPr
     } catch (error) { console.error('Error moving folder:', error); fetchProjectPaths(); }
   };
 
-  const fetchJournal = async (path: string) => {
+  const fetchKnowledge = async (path: string) => {
     setIsLoading(true);
     try {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const response = await fetch(`/project-management/api/clair/journal/${cleanPath}`);
+      const response = await fetch(`/project-management/api/clair/knowledge/${cleanPath}`);
       const data = await response.json();
       if (data.success) {
         setEntries(data.entries || []);
         setGrouped(data.grouped || {});
       }
     } catch (error) {
-      console.error('Error fetching journal:', error);
+      console.error('Error fetching knowledge:', error);
     } finally {
       setIsLoading(false);
     }
@@ -177,8 +178,8 @@ export default function KnowledgeTab({ projectPath, projectId, isParent, childPr
     try {
       const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       const url = editingEntry
-        ? `/project-management/api/clair/journal/${cleanPath}/${editingEntry.id}`
-        : `/project-management/api/clair/journal/${cleanPath}`;
+        ? `/project-management/api/clair/knowledge/${cleanPath}/${editingEntry.id}`
+        : `/project-management/api/clair/knowledge/${cleanPath}`;
       const method = editingEntry ? 'PATCH' : 'POST';
 
       await fetch(url, {
@@ -187,7 +188,7 @@ export default function KnowledgeTab({ projectPath, projectId, isParent, childPr
         body: JSON.stringify(formData),
       });
       resetForm();
-      fetchJournal(selectedPath.path);
+      fetchKnowledge(selectedPath.path);
     } catch (error) {
       console.error('Error saving entry:', error);
     }
@@ -197,8 +198,8 @@ export default function KnowledgeTab({ projectPath, projectId, isParent, childPr
     if (!confirm('Delete this entry?') || !selectedPath) return;
     try {
       const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
-      await fetch(`/project-management/api/clair/journal/${cleanPath}/${entry.id}`, { method: 'DELETE' });
-      fetchJournal(selectedPath.path);
+      await fetch(`/project-management/api/clair/knowledge/${cleanPath}/${entry.id}`, { method: 'DELETE' });
+      fetchKnowledge(selectedPath.path);
     } catch (error) {
       console.error('Error deleting entry:', error);
     }
@@ -306,7 +307,7 @@ export default function KnowledgeTab({ projectPath, projectId, isParent, childPr
               <div className="p-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Brain className="w-5 h-5 text-purple-400" />
-                  <h3 className="text-white font-semibold">{selectedPath.label} Journal</h3>
+                  <h3 className="text-white font-semibold">{projectName || selectedPath?.label || 'Project'} Knowledge</h3>
                   <span className="text-gray-500 text-sm">({entries.length} entries)</span>
                 </div>
                 <button
@@ -510,7 +511,7 @@ export default function KnowledgeTab({ projectPath, projectId, isParent, childPr
           <div className="flex items-center justify-center h-full text-gray-500">
             <div className="text-center">
               <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Select a folder to view journal</p>
+              <p>Select a folder to view knowledge</p>
             </div>
           </div>
         )}

@@ -26,6 +26,7 @@ interface Doc {
 interface DocsTabProps {
   projectPath: string;
   projectId: string;
+  projectName?: string;
   isParent?: boolean;
   childProjectIds?: string[];
 }
@@ -63,7 +64,7 @@ const TYPE_CONFIG = {
 
 type DocType = keyof typeof TYPE_CONFIG;
 
-export default function DocsTab({ projectPath, projectId, isParent, childProjectIds }: DocsTabProps) {
+export default function DocsTab({ projectPath, projectId, projectName, isParent, childProjectIds }: DocsTabProps) {
   const [projectPaths, setProjectPaths] = useState<ProjectPath[]>([]);
   const [selectedPath, setSelectedPath] = useState<ProjectPath | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -350,7 +351,7 @@ export default function DocsTab({ projectPath, projectId, isParent, childProject
               <div className="p-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-blue-400" />
-                  <h3 className="text-white font-semibold">{selectedPath.label} Documentation</h3>
+                  <h3 className="text-white font-semibold">{projectName || selectedPath?.label || 'Project'} Documentation</h3>
                   <span className="text-gray-500 text-sm">({docs.length} docs)</span>
                 </div>
                 <button
