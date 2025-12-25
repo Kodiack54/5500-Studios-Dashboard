@@ -1,7 +1,15 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle, Circle, Clock, ChevronDown, ChevronRight } from 'lucide-react';
+import { RefreshCw, CheckCircle, Circle, ChevronDown, Plus } from 'lucide-react';
+
+interface Phase {
+  id: string;
+  phase_num: number;
+  name: string;
+  description?: string;
+  status: string;
+}
 
 interface Todo {
   id: string;
@@ -9,6 +17,7 @@ interface Todo {
   description?: string;
   priority: string;
   status: string;
+  phase_id?: string;
   created_at: string;
 }
 
@@ -20,103 +29,245 @@ interface TodosTabProps {
   childProjectIds?: string[];
 }
 
-const PRIORITY_CONFIG: Record<string, {label: string, color: string}> = {
-  low: { label: 'Low', color: 'bg-gray-600/20 text-gray-400 border-gray-600' },
-  medium: { label: 'Medium', color: 'bg-yellow-600/20 text-yellow-400 border-yellow-600' },
-  high: { label: 'High', color: 'bg-orange-600/20 text-orange-400 border-orange-600' },
-  critical: { label: 'Critical', color: 'bg-red-600/20 text-red-400 border-red-600' },
-};
-
-const STATUS_CONFIG: Record<string, {label: string, icon: any, color: string}> = {
-  pending: { label: 'Pending', icon: Circle, color: 'text-gray-400' },
-  in_progress: { label: 'In Progress', icon: Clock, color: 'text-yellow-400' },
-  completed: { label: 'Completed', icon: CheckCircle, color: 'text-green-400' },
-};
+const scrollbarStyles = `
+  .scrollbar-blue::-webkit-scrollbar { height: 12px; }
+  .scrollbar-blue::-webkit-scrollbar-track { background: #1f2937; border-radius: 6px; }
+  .scrollbar-blue::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 6px; border: 2px solid #1f2937; }
+  .scrollbar-blue::-webkit-scrollbar-thumb:hover { background: #2563eb; }
+`;
 
 export default function TodosTab({ projectPath, projectId, projectName }: TodosTabProps) {
+  const [phases, setPhases] = useState<Phase[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('all');
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'kanban' | 'unassigned'>('kanban');
+  const [assigningTodo, setAssigningTodo] = useState<string | null>(null);
 
-  useEffect(() => { fetchTodos(); }, [projectPath]);
+  useEffect(() => { fetchData(); }, [projectPath, projectId]);
 
-  const fetchTodos = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
     try {
       const cleanPath = projectPath.startsWith('/') ? projectPath.slice(1) : projectPath;
-      const res = await fetch('/project-management/api/clair/todos/' + cleanPath);
-      const data = await res.json();
-      if (data.success) setTodos(data.todos || []);
+      const [phasesRes, todosRes] = await Promise.all([
+        fetch(`/project-management/api/phases/${projectId}`),
+        fetch(`/project-management/api/clair/todos/${projectId}`)
+      ]);
+      const phasesData = await phasesRes.json();
+      const todosData = await todosRes.json();
+      if (phasesData.success) setPhases(phasesData.phases || []);
+      if (todosData.success) setTodos(todosData.todos || []);
     } catch (e) { console.error(e); }
     finally { setIsLoading(false); }
   };
 
   const handleStatusChange = async (todo: Todo, newStatus: string) => {
     const cleanPath = projectPath.startsWith('/') ? projectPath.slice(1) : projectPath;
-    await fetch('/project-management/api/clair/todos/' + cleanPath + '/' + todo.id, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    await fetch(`/project-management/api/clair/todos/${projectId}/${todo.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     });
-    fetchTodos();
+    fetchData();
   };
 
-  const toggleExpand = (id: string) => {
-    setExpandedItems(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const handleAssignPhase = async (todoId: string, phaseId: string) => {
+    const cleanPath = projectPath.startsWith('/') ? projectPath.slice(1) : projectPath;
+    await fetch(`/project-management/api/clair/todos/${projectId}/${todoId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phase_id: phaseId }),
+    });
+    setAssigningTodo(null);
+    fetchData();
   };
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Group todos by phase
+  const todosByPhase = todos.reduce((acc, todo) => {
+    const key = todo.phase_id || 'unassigned';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(todo);
+    return acc;
+  }, {} as Record<string, Todo[]>);
 
-  const filteredTodos = todos.filter(t => filter === 'all' || (filter === 'pending' ? t.status !== 'completed' : t.status === 'completed'));
-  const counts = { all: todos.length, pending: todos.filter(t => t.status !== 'completed').length, completed: todos.filter(t => t.status === 'completed').length };
+  const unassignedTodos = todosByPhase['unassigned'] || [];
   const displayName = projectName || projectPath.split('/').pop() || 'Project';
 
-  if (isLoading) return <div className="flex items-center justify-center py-12"><RefreshCw className="w-6 h-6 text-blue-400 animate-spin" /></div>;
+  if (isLoading) {
+    return <div className="flex items-center justify-center py-12"><RefreshCw className="w-6 h-6 text-blue-400 animate-spin" /></div>;
+  }
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-      <div className="p-4 border-b border-gray-700 flex items-center gap-3">
-        <CheckCircle className="w-5 h-5 text-blue-400" />
-        <h3 className="text-white font-semibold">{displayName} TODOs</h3>
-        <div className="flex items-center gap-1 bg-gray-700 rounded-lg p-0.5">
-          {['all', 'pending', 'completed'].map(f => (
-            <button key={f} onClick={() => setFilter(f)} className={'px-3 py-1 rounded text-xs ' + (filter === f ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white')}>
-              {f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f as keyof typeof counts]})
-            </button>
-          ))}
+    <div className="h-full flex flex-col">
+      <style>{scrollbarStyles}</style>
+
+      {/* Header */}
+      <div className="p-4 border-b border-gray-700 flex items-center justify-between bg-gray-800">
+        <div className="flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-blue-400" />
+          <h3 className="text-white font-semibold">{displayName} Roadmap</h3>
+        </div>
+        <div className="flex bg-gray-700 rounded-lg p-0.5">
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`px-3 py-1 rounded text-xs ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+          >
+            Phases ({phases.length})
+          </button>
+          <button
+            onClick={() => setViewMode('unassigned')}
+            className={`px-3 py-1 rounded text-xs ${viewMode === 'unassigned' ? 'bg-yellow-600 text-white' : 'text-gray-400 hover:text-white'}`}
+          >
+            Unassigned ({unassignedTodos.length})
+          </button>
         </div>
       </div>
-      <div className="overflow-y-auto max-h-[calc(100vh-300px)] p-4">
-        {filteredTodos.length === 0 ? (
-          <div className="text-center py-8 text-gray-500"><CheckCircle className="w-10 h-10 mx-auto mb-2 opacity-50" /><p>No {filter} todos</p></div>
-        ) : (
-          <div className="space-y-2">
-            {filteredTodos.map(todo => {
-              const pc = PRIORITY_CONFIG[todo.priority] || PRIORITY_CONFIG.medium;
-              const sc = STATUS_CONFIG[todo.status] || STATUS_CONFIG.pending;
-              const SI = sc.icon;
+
+      {/* Kanban View */}
+      {viewMode === 'kanban' && (
+        <div className="flex-1 overflow-x-auto p-4 scrollbar-blue">
+          <div className="flex gap-4 min-w-max h-full">
+            {phases.map(phase => {
+              const phaseTodos = todosByPhase[phase.id] || [];
+              const completedCount = phaseTodos.filter(t => t.status === 'completed').length;
+              const allComplete = phaseTodos.length > 0 && completedCount === phaseTodos.length;
+
               return (
-                <div key={todo.id} className={'bg-gray-750 border rounded-lg p-3 ' + pc.color.split(' ')[2]}>
+                <div key={phase.id} className="w-80 flex-shrink-0 flex flex-col">
+                  {/* Phase Header */}
+                  <div className={`p-3 rounded-t-lg border-b ${allComplete ? 'bg-green-900/30 border-green-600' : 'bg-gray-750 border-gray-600'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`font-medium ${allComplete ? 'text-green-400' : 'text-white'}`}>
+                        Phase {phase.phase_num}: {phase.name}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${allComplete ? 'bg-green-600/30 text-green-400' : 'bg-gray-600 text-gray-400'}`}>
+                        {completedCount}/{phaseTodos.length}
+                      </span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${allComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+                        style={{ width: phaseTodos.length > 0 ? `${(completedCount / phaseTodos.length) * 100}%` : '0%' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Phase Todos */}
+                  <div className="flex-1 bg-gray-800 border border-gray-700 border-t-0 rounded-b-lg p-2 space-y-1 overflow-y-auto max-h-[calc(100vh-280px)]">
+                    {phaseTodos.map(todo => {
+                      const isCompleted = todo.status === 'completed';
+                      return (
+                        <div
+                          key={todo.id}
+                          className={`flex items-start gap-2 p-2 rounded hover:bg-gray-700/50 ${isCompleted ? 'opacity-60' : ''}`}
+                        >
+                          <button
+                            onClick={() => handleStatusChange(todo, isCompleted ? 'pending' : 'completed')}
+                            className="mt-0.5 flex-shrink-0"
+                          >
+                            {isCompleted ? (
+                              <CheckCircle className="w-4 h-4 text-green-400" />
+                            ) : (
+                              <Circle className="w-4 h-4 text-gray-400 hover:text-blue-400" />
+                            )}
+                          </button>
+                          <span className={`text-sm ${isCompleted ? 'text-gray-500 line-through' : 'text-gray-200'}`}>
+                            {todo.title}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {phaseTodos.length === 0 && (
+                      <div className="text-center py-4 text-gray-500 text-sm">No items</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {phases.length === 0 && (
+              <div className="w-full text-center py-12 text-gray-500">
+                <p>No phases defined for this project</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Unassigned View */}
+      {viewMode === 'unassigned' && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-4 mb-4">
+            <p className="text-yellow-400 text-sm">
+              These items need to be assigned to a phase. Click the dropdown to assign.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {unassignedTodos.map(todo => {
+              const isCompleted = todo.status === 'completed';
+              const isAssigning = assigningTodo === todo.id;
+
+              return (
+                <div key={todo.id} className="bg-gray-800 border border-gray-700 rounded-lg p-3">
                   <div className="flex items-start gap-3">
-                    <button onClick={() => handleStatusChange(todo, todo.status === 'completed' ? 'pending' : 'completed')} className={'mt-0.5 ' + sc.color}><SI className="w-5 h-5" /></button>
-                    <div className="flex-1">
-                      <span className={'px-2 py-0.5 rounded text-xs ' + pc.color.split(' ').slice(0,2).join(' ')}>{pc.label}</span>
-                      <h3 className={'font-medium mt-1 ' + (todo.status === 'completed' ? 'text-gray-500 line-through' : 'text-white')}>{todo.title}</h3>
-                      {todo.description && (
-                        <><button onClick={() => toggleExpand(todo.id)} className="text-gray-500 text-sm flex items-center gap-1 mt-1">
-                          {expandedItems.has(todo.id) ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}Details
-                        </button>
-                        {expandedItems.has(todo.id) && <p className="text-gray-400 text-sm mt-2">{todo.description}</p>}</>
+                    <button
+                      onClick={() => handleStatusChange(todo, isCompleted ? 'pending' : 'completed')}
+                      className="mt-0.5"
+                    >
+                      {isCompleted ? (
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                      ) : (
+                        <Circle className="w-5 h-5 text-gray-400" />
                       )}
-                      <div className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(todo.created_at)}</div>
+                    </button>
+
+                    <div className="flex-1">
+                      <p className={`${isCompleted ? 'text-gray-500 line-through' : 'text-white'}`}>
+                        {todo.title}
+                      </p>
+                    </div>
+
+                    {/* Assign dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setAssigningTodo(isAssigning ? null : todo.id)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Assign
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+
+                      {isAssigning && (
+                        <div className="absolute right-0 top-8 z-10 bg-gray-800 border border-gray-600 rounded-lg shadow-lg py-1 min-w-[200px]">
+                          {phases.map(phase => (
+                            <button
+                              key={phase.id}
+                              onClick={() => handleAssignPhase(todo.id, phase.id)}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-700 text-gray-300"
+                            >
+                              Phase {phase.phase_num}: {phase.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               );
             })}
+
+            {unassignedTodos.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>All todos are assigned to phases</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

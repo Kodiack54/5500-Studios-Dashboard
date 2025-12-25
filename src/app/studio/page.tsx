@@ -20,7 +20,7 @@ import { Plug, PlugZap, Monitor } from 'lucide-react';
 import type { Project, Environment } from '@/types';
 import { ENVIRONMENTS } from '@/types';
 
-// Sidebar items - same as dev-studio-5000
+// Sidebar items - same as kodiack-dashboard-5500
 const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'files', icon: '📁', label: 'Files' },
   { id: 'terminal', icon: '💻', label: 'Terminal' },
@@ -324,7 +324,7 @@ export default function StudioPage() {
           <div className="flex-1 min-h-0 flex flex-col">
             <ClaudeTerminal
               port={selectedTeam.basePort}
-              projectPath={selectedProject?.server_path || '/var/www/NextBid_Dev/dev-studio-5000'}
+              projectPath={selectedProject?.server_path || '/var/www/Studio'}
             />
           </div>
         </div>

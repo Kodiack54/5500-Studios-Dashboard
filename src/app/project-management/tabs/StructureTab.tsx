@@ -26,6 +26,7 @@ interface TreeNode {
 interface StructureTabProps {
   projectPath: string;
   projectId: string;
+  projectName?: string;
   isParent?: boolean;
   childProjectIds?: string[];
 }
@@ -121,8 +122,8 @@ export default function StructureTab({ projectPath, projectId, isParent, childPr
     setIsLoading(true);
     try {
       // Remove leading slash for URL path segments
-      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const response = await fetch(`/project-management/api/clair/structure/${cleanPath}?depth=4`);
+      const projectId = path.startsWith('/') ? path.slice(1) : path;
+      const response = await fetch(`/project-management/api/clair/structure/${projectId}?depth=4`);
       const data = await response.json();
       if (data.success) {
         setTree(data.tree);
@@ -162,8 +163,8 @@ export default function StructureTab({ projectPath, projectId, isParent, childPr
   const saveDescription = async (folderPath: string) => {
     if (!selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
-      await fetch(`/project-management/api/clair/structure/${cleanPath}/describe`, {
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      await fetch(`/project-management/api/clair/structure/${projectId}/describe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

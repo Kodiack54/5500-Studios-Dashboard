@@ -52,6 +52,7 @@ interface RLSPolicy {
 interface DatabaseTabProps {
   projectPath: string;
   projectId: string;
+  projectName?: string;
   isParent?: boolean;
   childProjectIds?: string[];
 }
@@ -160,22 +161,22 @@ export default function DatabaseTab({ projectPath, projectId, isParent, childPro
     setIsLoading(true);
 
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
 
       if (activeTab === 'tables') {
-        const response = await fetch(`/project-management/api/clair/database/${cleanPath}/tables`);
+        const response = await fetch(`/project-management/api/clair/database/${projectId}/tables`);
         const data = await response.json();
         if (data.success) {
           setTables(data.tables || []);
         }
       } else if (activeTab === 'schemas') {
-        const response = await fetch(`/project-management/api/clair/database/${cleanPath}/schemas`);
+        const response = await fetch(`/project-management/api/clair/database/${projectId}/schemas`);
         const data = await response.json();
         if (data.success) {
           setSchemas(data.schemas || []);
         }
       } else if (activeTab === 'rls') {
-        const response = await fetch(`/project-management/api/clair/database/${cleanPath}/rls`);
+        const response = await fetch(`/project-management/api/clair/database/${projectId}/rls`);
         const data = await response.json();
         if (data.success) {
           setPolicies(data.policies || []);
@@ -191,8 +192,8 @@ export default function DatabaseTab({ projectPath, projectId, isParent, childPro
   const fetchTableColumns = async (tableName: string) => {
     if (!selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
-      const response = await fetch(`/project-management/api/clair/database/${cleanPath}/table/${tableName}/columns`);
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      const response = await fetch(`/project-management/api/clair/database/${projectId}/table/${tableName}/columns`);
       const data = await response.json();
       if (data.success) {
         setTables(prev => prev.map(t =>

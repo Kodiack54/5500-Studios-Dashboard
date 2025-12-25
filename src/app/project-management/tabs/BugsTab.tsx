@@ -150,8 +150,8 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   const fetchBugs = async (path: string) => {
     setIsLoading(true);
     try {
-      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const response = await fetch(`/project-management/api/clair/bugs/${cleanPath}`);
+      const projectId = path.startsWith('/') ? path.slice(1) : path;
+      const response = await fetch(`/project-management/api/clair/bugs/${projectId}`);
       const data = await response.json();
       if (data.success) {
         setBugs(data.bugs || []);
@@ -166,10 +166,10 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   const handleSubmit = async () => {
     if (!formData.title || !selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       const url = editingBug
-        ? `/project-management/api/clair/bugs/${cleanPath}/${editingBug.id}`
-        : `/project-management/api/clair/bugs/${cleanPath}`;
+        ? `/project-management/api/clair/bugs/${projectId}/${editingBug.id}`
+        : `/project-management/api/clair/bugs/${projectId}`;
       const method = editingBug ? 'PATCH' : 'POST';
 
       await fetch(url, {
@@ -191,8 +191,8 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   const handleStatusChange = async (bug: BugReport, newStatus: BugReport['status']) => {
     if (!selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
-      await fetch(`/project-management/api/clair/bugs/${cleanPath}/${bug.id}`, {
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      await fetch(`/project-management/api/clair/bugs/${projectId}/${bug.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -209,8 +209,8 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   const handleDelete = async (bug: BugReport) => {
     if (!confirm('Delete this bug report?') || !selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
-      await fetch(`/project-management/api/clair/bugs/${cleanPath}/${bug.id}`, { method: 'DELETE' });
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      await fetch(`/project-management/api/clair/bugs/${projectId}/${bug.id}`, { method: 'DELETE' });
       fetchBugs(selectedPath.path);
     } catch (error) {
       console.error('Error deleting bug:', error);
@@ -220,8 +220,8 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   const handleArchive = async (bug: BugReport) => {
     if (!selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
-      await fetch(`/project-management/api/clair/bugs/${cleanPath}/${bug.id}/archive`, { method: 'POST' });
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      await fetch(`/project-management/api/clair/bugs/${projectId}/${bug.id}/archive`, { method: 'POST' });
       fetchBugs(selectedPath.path);
     } catch (error) {
       console.error('Error archiving bug:', error);

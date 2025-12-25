@@ -1,7 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, FileText, X, Edit2, Eye, FolderOpen, Search, RefreshCw, Trash2, BookOpen, Layers, Map, FileCode, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, FileText, X, Edit2, Eye, FolderOpen, Search, RefreshCw, Trash2, BookOpen, Layers, Map, FileCode, ChevronUp, ChevronDown, Clock } from 'lucide-react';
+
+const formatDate = (d: string) => {
+  const date = new Date(d);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 interface ProjectPath {
   id: string;
@@ -15,7 +29,7 @@ interface ProjectPath {
 interface Doc {
   id: string;
   project_path: string;
-  type: 'breakdown' | 'howto' | 'schematic' | 'reference';
+  doc_type: 'breakdown' | 'howto' | 'schematic' | 'reference';
   title: string;
   content: string;
   category?: string;
@@ -82,15 +96,15 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
     category: '',
   });
 
+  // Fetch docs directly using projectPath (like TodosTab)
+  useEffect(() => {
+    fetchDocs(projectPath);
+  }, [projectPath]);
+
+  // Also fetch project paths for folder selector
   useEffect(() => {
     fetchProjectPaths();
   }, [projectId]);
-
-  useEffect(() => {
-    if (selectedPath) {
-      fetchDocs(selectedPath.path);
-    }
-  }, [selectedPath]);
 
   const fetchProjectPaths = async () => {
     try {
@@ -155,18 +169,19 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
   };
 
   const fetchDocs = async (path: string) => {
+    if (!path) return;
     setIsLoading(true);
     try {
-      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const response = await fetch(`/project-management/api/clair/docs/${cleanPath}`);
+      const projectId = path.startsWith('/') ? path.slice(1) : path;
+      const response = await fetch(`/project-management/api/clair/docs/${projectId}`);
       const data = await response.json();
       if (data.success) {
         setDocs(data.docs || []);
-        // Group by type
+        // Group by doc_type
         const g: Record<string, Doc[]> = {};
         (data.docs || []).forEach((doc: Doc) => {
-          if (!g[doc.type]) g[doc.type] = [];
-          g[doc.type].push(doc);
+          if (!g[doc.doc_type]) g[doc.doc_type] = [];
+          g[doc.doc_type].push(doc);
         });
         setGrouped(g);
       }
@@ -180,10 +195,10 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
   const handleSubmit = async () => {
     if (!formData.title || !formData.content || !selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       const url = editingDoc
-        ? `/project-management/api/clair/docs/${cleanPath}/${editingDoc.id}`
-        : `/project-management/api/clair/docs/${cleanPath}`;
+        ? `/project-management/api/clair/docs/${projectId}/${editingDoc.id}`
+        : `/project-management/api/clair/docs/${projectId}`;
       const method = editingDoc ? 'PATCH' : 'POST';
 
       await fetch(url, {
@@ -201,8 +216,8 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
   const handleDelete = async (doc: Doc) => {
     if (!confirm('Delete this document?') || !selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
-      await fetch(`/project-management/api/clair/docs/${cleanPath}/${doc.id}`, { method: 'DELETE' });
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      await fetch(`/project-management/api/clair/docs/${projectId}/${doc.id}`, { method: 'DELETE' });
       if (selectedDoc?.id === doc.id) setSelectedDoc(null);
       fetchDocs(selectedPath.path);
     } catch (error) {
@@ -213,7 +228,7 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
   const startEdit = (doc: Doc) => {
     setEditingDoc(doc);
     setFormData({
-      type: doc.type as DocType,
+      type: doc.doc_type as DocType,
       title: doc.title,
       content: doc.content,
       category: doc.category || '',
@@ -239,7 +254,7 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
 
   // Doc viewer mode
   if (selectedDoc) {
-    const docConfig = TYPE_CONFIG[selectedDoc.type as DocType];
+    const docConfig = TYPE_CONFIG[selectedDoc.doc_type as DocType];
     const DocIcon = docConfig.icon;
     return (
       <div className="flex h-full gap-4">
@@ -484,6 +499,10 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
                             {doc.category && (
                               <span className="px-2 py-0.5 bg-gray-700 text-gray-400 rounded text-xs">{doc.category}</span>
                             )}
+                            <span className="flex items-center gap-1 text-gray-500 text-xs">
+                              <Clock className="w-3 h-3" />
+                              {formatDate(doc.created_at)}
+                            </span>
                           </div>
                           <h3 className="text-white font-medium truncate">{doc.title}</h3>
                           <p className="text-gray-500 text-sm mt-2 line-clamp-2">{doc.content}</p>

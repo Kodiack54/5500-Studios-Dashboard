@@ -101,21 +101,85 @@ function ProjectManagementContent() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [projectStats, setProjectStats] = useState<Record<string, ProjectStats>>({});
+  const [previewProject, setPreviewProject] = useState<Project | null>(null);
+  const [previewDocs, setPreviewDocs] = useState<Array<{ id: string; name: string; doc_type: string }>>([]);
+  const [previewTodos, setPreviewTodos] = useState<Array<{ id: string; title: string; status: string; priority: string }>>([]);
+  const [previewKnowledge, setPreviewKnowledge] = useState<Array<{ id: string; title: string; category: string }>>([]);
+  const [previewBugs, setPreviewBugs] = useState<Array<{ id: string; title: string; severity: string; status: string }>>([]);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['todos', 'docs']));
 
   // Filter projects by selected client
   const projects = selectedClient
     ? allProjects.filter(p => p.client_id === selectedClient.id)
     : allProjects;
 
-  // Stats type
+  // Stats type - matches summary API
   interface ProjectStats {
-    sessions: { pending: number; processed: number; total: number };
-    todos: { pending: number; completed: number; total: number };
+    todos: number;
     knowledge: number;
+    docs: number;
+    conventions: number;
     bugs: number;
-    code_changes: number;
-    last_activity: string | null;
   }
+
+  // Get stats for a project (with parent aggregation)
+  const getProjectStats = (projectId: string, isParent?: boolean): ProjectStats => {
+    if (isParent) {
+      // Aggregate children stats
+      const childIds = childProjects.filter(p => p.parent_id === projectId).map(p => p.id);
+      const aggregated: ProjectStats = { todos: 0, knowledge: 0, docs: 0, conventions: 0, bugs: 0 };
+
+      // Include parent's own stats
+      const parentStats = projectStats[projectId];
+      if (parentStats) {
+        aggregated.todos += parentStats.todos || 0;
+        aggregated.knowledge += parentStats.knowledge || 0;
+        aggregated.docs += parentStats.docs || 0;
+        aggregated.conventions += parentStats.conventions || 0;
+        aggregated.bugs += parentStats.bugs || 0;
+      }
+
+      // Add children stats
+      for (const childId of childIds) {
+        const childStat = projectStats[childId];
+        if (childStat) {
+          aggregated.todos += childStat.todos || 0;
+          aggregated.knowledge += childStat.knowledge || 0;
+          aggregated.docs += childStat.docs || 0;
+          aggregated.conventions += childStat.conventions || 0;
+          aggregated.bugs += childStat.bugs || 0;
+        }
+      }
+      return aggregated;
+    }
+    return projectStats[projectId] || { todos: 0, knowledge: 0, docs: 0, conventions: 0, bugs: 0 };
+  };
+
+  // Stats display component - horizontal row with equal columns
+  const StatsColumn = ({ stats }: { stats: ProjectStats }) => {
+    const hasAny = stats.todos || stats.knowledge || stats.docs || stats.conventions || stats.bugs;
+    if (!hasAny) return null;
+
+    return (
+      <div className="flex items-center gap-1">
+        <div className="w-12 text-center px-1.5 py-0.5 bg-blue-600/20 rounded">
+          <span className="text-xs font-medium text-blue-400">{stats.todos}</span>
+        </div>
+        <div className="w-12 text-center px-1.5 py-0.5 bg-purple-600/20 rounded">
+          <span className="text-xs font-medium text-purple-400">{stats.knowledge}</span>
+        </div>
+        <div className="w-12 text-center px-1.5 py-0.5 bg-green-600/20 rounded">
+          <span className="text-xs font-medium text-green-400">{stats.docs}</span>
+        </div>
+        <div className="w-12 text-center px-1.5 py-0.5 bg-yellow-600/20 rounded">
+          <span className="text-xs font-medium text-yellow-400">{stats.conventions}</span>
+        </div>
+        <div className="w-12 text-center px-1.5 py-0.5 bg-red-600/20 rounded">
+          <span className="text-xs font-medium text-red-400">{stats.bugs}</span>
+        </div>
+      </div>
+    );
+  };
 
   // DnD sensors
   const sensors = useSensors(
@@ -167,12 +231,74 @@ function ProjectManagementContent() {
       const data = await response.json();
       if (data.success) {
         setAllProjects(data.projects);
+        // Fetch summaries for all projects
+        fetchSummaries();
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchSummaries = async () => {
+    try {
+      const response = await fetch('/project-management/api/projects/summary');
+      const data = await response.json();
+      if (data.success && data.summaries) {
+        setProjectStats(data.summaries);
+      }
+    } catch (error) {
+      console.error('Error fetching summaries:', error);
+    }
+  };
+
+  const fetchPreviewData = async (project: Project) => {
+    setPreviewProject(project);
+    const projectPath = project.server_path || '';
+
+    // Fetch all data in parallel
+    try {
+      const [docsRes, todosRes, knowledgeRes, bugsRes] = await Promise.all([
+        fetch(`/project-management/api/docs?project_path=${encodeURIComponent(projectPath)}`),
+        fetch(`/project-management/api/todos?project_path=${encodeURIComponent(projectPath)}`),
+        fetch(`/project-management/api/knowledge?project_path=${encodeURIComponent(projectPath)}`),
+        fetch(`/project-management/api/bugs?project_path=${encodeURIComponent(projectPath)}`)
+      ]);
+
+      const [docsData, todosData, knowledgeData, bugsData] = await Promise.all([
+        docsRes.json(), todosRes.json(), knowledgeRes.json(), bugsRes.json()
+      ]);
+
+      if (docsData.success && docsData.docs) {
+        setPreviewDocs(docsData.docs.slice(0, 10));
+      }
+      if (todosData.success && todosData.todos) {
+        const sorted = todosData.todos.sort((a: { status: string }, b: { status: string }) => {
+          const order: Record<string, number> = { 'in_progress': 0, 'pending': 1, 'completed': 2 };
+          return (order[a.status] || 3) - (order[b.status] || 3);
+        });
+        setPreviewTodos(sorted.slice(0, 10));
+      }
+      if (knowledgeData.success && knowledgeData.knowledge) {
+        setPreviewKnowledge(knowledgeData.knowledge.slice(0, 8));
+      }
+      if (bugsData.success && bugsData.bugs) {
+        const activeBugs = bugsData.bugs.filter((b: { status: string }) => b.status !== 'resolved');
+        setPreviewBugs(activeBugs.slice(0, 5));
+      }
+    } catch (error) {
+      console.error('Error fetching preview data:', error);
+    }
+  };
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
   };
 
   const handleSelectProject = (project: Project) => {
@@ -477,7 +603,8 @@ function ProjectManagementContent() {
             {/* Name & Info */}
             <div
               className="flex-1 cursor-pointer"
-              onClick={() => handleSelectProject(project)}
+              onClick={() => fetchPreviewData(project)}
+              onDoubleClick={() => handleSelectProject(project)}
             >
               <div className="flex items-center gap-2">
                 <h3 className="text-white font-semibold">{project.name}</h3>
@@ -507,6 +634,9 @@ function ProjectManagementContent() {
                 </div>
               )}
             </div>
+
+            {/* Stats Column */}
+            <StatsColumn stats={getProjectStats(project.id, true)} />
 
             {/* Dev/Test/Prod ports - one of each */}
             <div className="flex items-center gap-2">
@@ -599,11 +729,15 @@ function ProjectManagementContent() {
 
         {/* Name */}
         <span
-          className={`font-medium flex-1 ${envColor ? envColor.text : 'text-white'}`}
-          onClick={() => handleSelectProject(child)}
+          className={`font-medium flex-1 cursor-pointer ${envColor ? envColor.text : 'text-white'}`}
+          onClick={() => fetchPreviewData(child)}
+          onDoubleClick={() => handleSelectProject(child)}
         >
           {child.name}
         </span>
+
+        {/* Stats Column */}
+        <StatsColumn stats={getProjectStats(child.id)} />
 
         {/* Port */}
         {(child.port_dev || child.port_test || child.port_prod) && (
@@ -671,7 +805,7 @@ function ProjectManagementContent() {
           )}
 
           {/* Name */}
-          <div className="flex-1" onClick={() => handleSelectProject(project)}>
+          <div className="flex-1 cursor-pointer" onClick={() => fetchPreviewData(project)} onDoubleClick={() => handleSelectProject(project)}>
             <div className="flex items-center gap-2">
               <h3 className="text-white font-semibold">{project.name}</h3>
               {envColor && (
@@ -682,6 +816,9 @@ function ProjectManagementContent() {
             </div>
             <span className="text-gray-500 text-xs">{project.slug}</span>
           </div>
+
+          {/* Stats Column */}
+          <StatsColumn stats={getProjectStats(project.id)} />
 
           {/* Ports */}
           <div className="flex items-center gap-2">
@@ -736,10 +873,56 @@ function ProjectManagementContent() {
             Add Project
           </button>
         </div>
+
+        {/* Stats Row - totals across all projects (filtered by client) */}
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <div className="grid grid-cols-5 gap-3">
+            {(() => {
+              // Aggregate stats across all visible projects
+              const totalStats = { todos: 0, knowledge: 0, docs: 0, conventions: 0, bugs: 0 };
+              projects.forEach(p => {
+                const s = projectStats[p.id];
+                if (s) {
+                  totalStats.todos += s.todos || 0;
+                  totalStats.knowledge += s.knowledge || 0;
+                  totalStats.docs += s.docs || 0;
+                  totalStats.conventions += s.conventions || 0;
+                  totalStats.bugs += s.bugs || 0;
+                }
+              });
+              return (
+                <>
+                  <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                    <span className="text-sm text-gray-400">Todos</span>
+                    <span className="text-xl font-bold text-blue-400">{totalStats.todos}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                    <span className="text-sm text-gray-400">Knowledge</span>
+                    <span className="text-xl font-bold text-purple-400">{totalStats.knowledge}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                    <span className="text-sm text-gray-400">Docs</span>
+                    <span className="text-xl font-bold text-green-400">{totalStats.docs}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                    <span className="text-sm text-gray-400">Conventions</span>
+                    <span className="text-xl font-bold text-yellow-400">{totalStats.conventions}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                    <span className="text-sm text-gray-400">Bugs</span>
+                    <span className="text-xl font-bold text-red-400">{totalStats.bugs}</span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
       </div>
 
-      {/* Project List */}
-      <div className="p-6 max-w-5xl mx-auto">
+      {/* Project List + Preview Panel */}
+      <div className="flex gap-6 p-6">
+        {/* Left: Project List (2/3) */}
+        <div className="flex-1 max-w-3xl">
         {projects.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">📁</div>
@@ -794,6 +977,197 @@ function ProjectManagementContent() {
             </DragOverlay>
           </DndContext>
         )}
+        </div>
+
+        {/* Right: Preview Panel (1/3) */}
+        <div className="w-96 flex-shrink-0">
+          {previewProject ? (
+            <div className="bg-gray-800 border border-gray-700 rounded-lg sticky top-6 max-h-[calc(100vh-120px)] overflow-y-auto">
+              {/* Project Header */}
+              <div className="flex items-center gap-3 p-4 border-b border-gray-700 bg-gray-800 sticky top-0">
+                {previewProject.logo_url ? (
+                  <img src={previewProject.logo_url} alt={previewProject.name} className="w-12 h-12 rounded-lg object-cover" />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-purple-600/20 flex items-center justify-center text-purple-400 text-xl font-bold">
+                    {previewProject.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <h3 className="text-white font-semibold">{previewProject.name}</h3>
+                  <div className="flex items-center gap-2">
+                    {previewProject.is_parent && (
+                      <span className="text-xs text-purple-400">Parent</span>
+                    )}
+                    {previewProject.description && (
+                      <span className="text-xs text-gray-500 truncate max-w-[180px]">{previewProject.description}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Project KPI Stats */}
+              <div className="p-4 border-b border-gray-700">
+                <div className="grid grid-cols-5 gap-2">
+                  {(() => {
+                    const stats = getProjectStats(previewProject.id, previewProject.is_parent);
+                    return (
+                      <>
+                        <div className="text-center p-2 bg-gray-900 rounded">
+                          <div className="text-lg font-bold text-blue-400">{stats.todos}</div>
+                          <div className="text-[10px] text-gray-500">Todos</div>
+                        </div>
+                        <div className="text-center p-2 bg-gray-900 rounded">
+                          <div className="text-lg font-bold text-purple-400">{stats.knowledge}</div>
+                          <div className="text-[10px] text-gray-500">Know</div>
+                        </div>
+                        <div className="text-center p-2 bg-gray-900 rounded">
+                          <div className="text-lg font-bold text-green-400">{stats.docs}</div>
+                          <div className="text-[10px] text-gray-500">Docs</div>
+                        </div>
+                        <div className="text-center p-2 bg-gray-900 rounded">
+                          <div className="text-lg font-bold text-yellow-400">{stats.conventions}</div>
+                          <div className="text-[10px] text-gray-500">Conv</div>
+                        </div>
+                        <div className="text-center p-2 bg-gray-900 rounded">
+                          <div className="text-lg font-bold text-red-400">{stats.bugs}</div>
+                          <div className="text-[10px] text-gray-500">Bugs</div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Collapsible Sections */}
+              <div className="divide-y divide-gray-700">
+                {/* Todos Section */}
+                <div>
+                  <button
+                    onClick={() => toggleSection('todos')}
+                    className="w-full flex items-center justify-between p-3 hover:bg-gray-700/50 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                      Active Todos
+                      <span className="text-xs text-gray-500">({previewTodos.length})</span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.has('todos') ? '' : '-rotate-90'}`} />
+                  </button>
+                  {expandedSections.has('todos') && previewTodos.length > 0 && (
+                    <div className="px-3 pb-3 space-y-1">
+                      {previewTodos.map(todo => (
+                        <div key={todo.id} className="flex items-center gap-2 text-sm p-2 bg-gray-900 rounded">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            todo.status === 'in_progress' ? 'bg-blue-400 animate-pulse' :
+                            todo.status === 'completed' ? 'bg-green-400' : 'bg-gray-500'
+                          }`} />
+                          <span className="text-gray-300 truncate flex-1">{todo.title}</span>
+                          {todo.priority === 'high' && <span className="text-red-400 text-xs font-bold">!</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bugs Section */}
+                {previewBugs.length > 0 && (
+                  <div>
+                    <button
+                      onClick={() => toggleSection('bugs')}
+                      className="w-full flex items-center justify-between p-3 hover:bg-gray-700/50 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                        Open Bugs
+                        <span className="text-xs text-gray-500">({previewBugs.length})</span>
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.has('bugs') ? '' : '-rotate-90'}`} />
+                    </button>
+                    {expandedSections.has('bugs') && (
+                      <div className="px-3 pb-3 space-y-1">
+                        {previewBugs.map(bug => (
+                          <div key={bug.id} className="flex items-center gap-2 text-sm p-2 bg-gray-900 rounded">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                              bug.severity === 'critical' ? 'bg-red-600 text-white' :
+                              bug.severity === 'high' ? 'bg-orange-600 text-white' :
+                              'bg-yellow-600 text-black'
+                            }`}>{bug.severity}</span>
+                            <span className="text-gray-300 truncate flex-1">{bug.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Docs Section */}
+                <div>
+                  <button
+                    onClick={() => toggleSection('docs')}
+                    className="w-full flex items-center justify-between p-3 hover:bg-gray-700/50 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                      Documentation
+                      <span className="text-xs text-gray-500">({previewDocs.length})</span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.has('docs') ? '' : '-rotate-90'}`} />
+                  </button>
+                  {expandedSections.has('docs') && previewDocs.length > 0 && (
+                    <div className="px-3 pb-3 space-y-1">
+                      {previewDocs.map(doc => (
+                        <div key={doc.id} className="flex items-center gap-2 text-sm p-2 bg-gray-900 rounded">
+                          <span className="px-1.5 py-0.5 bg-green-600/20 text-green-400 rounded text-[10px]">{doc.doc_type || 'doc'}</span>
+                          <span className="text-gray-300 truncate flex-1">{doc.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Knowledge Section */}
+                <div>
+                  <button
+                    onClick={() => toggleSection('knowledge')}
+                    className="w-full flex items-center justify-between p-3 hover:bg-gray-700/50 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                      Knowledge Base
+                      <span className="text-xs text-gray-500">({previewKnowledge.length})</span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.has('knowledge') ? '' : '-rotate-90'}`} />
+                  </button>
+                  {expandedSections.has('knowledge') && previewKnowledge.length > 0 && (
+                    <div className="px-3 pb-3 space-y-1">
+                      {previewKnowledge.map(k => (
+                        <div key={k.id} className="flex items-center gap-2 text-sm p-2 bg-gray-900 rounded">
+                          <span className="px-1.5 py-0.5 bg-purple-600/20 text-purple-400 rounded text-[10px]">{k.category || 'note'}</span>
+                          <span className="text-gray-300 truncate flex-1">{k.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* View Project Button */}
+              <div className="p-4 border-t border-gray-700 bg-gray-800 sticky bottom-0">
+                <button
+                  onClick={() => handleSelectProject(previewProject)}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Open Project →
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-800/50 border border-gray-700/50 border-dashed rounded-lg p-8 text-center">
+              <div className="text-gray-600 text-sm mb-2">Select a project</div>
+              <div className="text-gray-500 text-xs">Click any project to see KPIs and details</div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Project Form Modal */}

@@ -1,68 +1,87 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Pool } from 'pg';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
-const pool = new Pool({
-  host: '127.0.0.1',
-  port: 9432,
-  database: 'kodiack_ai',
-  user: 'postgres',
-  password: 'kodiack2025',
-});
+const ITEM_TABLES = [
+  "dev_ai_todos",
+  "dev_ai_bugs", 
+  "dev_ai_knowledge",
+  "dev_ai_docs",
+  "dev_ai_journal",
+  "dev_ai_conventions",
+  "dev_ai_snippets",
+  "dev_ai_decisions",
+  "dev_ai_lessons",
+];
 
-// GET - Fetch bucket/status counts from dev_ai_sessions
-// ?workspace=dev1|dev2|dev3|global - filter by team workspace
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const workspace = searchParams.get('workspace'); // Filter by team: global, dev1, dev2, dev3
+    const workspace = searchParams.get("workspace");
 
-    // Build WHERE clause
-    const whereClause = workspace ? 'WHERE workspace = $1' : '';
-    const params = workspace ? [workspace] : [];
-
-    // Get counts by status (bucket)
-    const statusResult = await pool.query(`
-      SELECT status, COUNT(*) as count
-      FROM dev_ai_sessions
-      ${whereClause}${workspace ? ' AND' : 'WHERE'} status IS NOT NULL
-      GROUP BY status
-      ORDER BY count DESC
-    `, params);
-
-    // Convert to object format
-    const buckets: Record<string, number> = {};
-    for (const row of statusResult.rows) {
-      buckets[row.status] = parseInt(row.count);
+    // 1. Session counts (Chad's work)
+    let sessionQuery = db.from("dev_ai_sessions").select("status, started_at");
+    if (workspace) {
+      sessionQuery = sessionQuery.eq("workspace", workspace);
+    }
+    const { data: sessions } = await sessionQuery;
+    
+    const sessionList = Array.isArray(sessions) ? sessions : [];
+    const now = new Date();
+    const day = 24 * 60 * 60 * 1000;
+    
+    let activeSessions = 0, processedSessions = 0, last24h = 0;
+    for (const s of sessionList) {
+      const status = (s as Record<string, unknown>).status as string;
+      const startedAt = (s as Record<string, unknown>).started_at as string;
+      if (status === "active") activeSessions++;
+      if (status === "processed") processedSessions++;
+      if (startedAt) {
+        const startTime = new Date(startedAt).getTime();
+        if (now.getTime() - startTime < day) last24h++;
+      }
     }
 
-    // Also get some summary stats matching the pipeline:
-    // active → captured → flagged → pending → cleaned → archived
-    const statsResult = await pool.query(`
-      SELECT
-        COUNT(*) as total_sessions,
-        COUNT(*) FILTER (WHERE status = 'active') as active,
-        COUNT(*) FILTER (WHERE status = 'captured') as captured,
-        COUNT(*) FILTER (WHERE status = 'flagged') as flagged,
-        COUNT(*) FILTER (WHERE status = 'pending') as pending,
-        COUNT(*) FILTER (WHERE status = 'cleaned') as cleaned,
-        COUNT(*) FILTER (WHERE status = 'archived') as archived,
-        COUNT(*) FILTER (WHERE started_at > NOW() - INTERVAL '24 hours') as last_24h,
-        COUNT(*) FILTER (WHERE started_at > NOW() - INTERVAL '2 days') as last_2_days,
-        MAX(started_at) as last_session
-      FROM dev_ai_sessions
-      ${whereClause}
-    `, params);
+    // 2. Item counts by status using raw SQL
+    let totalFlagged = 0, totalPending = 0, totalFinal = 0;
+    
+    for (const table of ITEM_TABLES) {
+      try {
+        const flaggedResult = await db.query<{ count: string }>(`SELECT COUNT(*) as count FROM ${table} WHERE status = 'flagged'`);
+        const pendingResult = await db.query<{ count: string }>(`SELECT COUNT(*) as count FROM ${table} WHERE status = 'pending'`);
+        const finalResult = await db.query<{ count: string }>(`SELECT COUNT(*) as count FROM ${table} WHERE status NOT IN ('flagged', 'pending')`);
+        
+        totalFlagged += parseInt((flaggedResult.data as { count: string }[])?.[0]?.count || "0", 10);
+        totalPending += parseInt((pendingResult.data as { count: string }[])?.[0]?.count || "0", 10);
+        totalFinal += parseInt((finalResult.data as { count: string }[])?.[0]?.count || "0", 10);
+      } catch {}
+    }
 
     return NextResponse.json({
       success: true,
-      buckets,
-      stats: statsResult.rows[0],
+      buckets: {
+        active: activeSessions,
+        processed: processedSessions,
+        flagged: totalFlagged,
+        pending: totalPending,
+        published: totalFinal,
+      },
+      stats: {
+        total_sessions: sessionList.length,
+        active: activeSessions,
+        processed: processedSessions,
+        flagged: totalFlagged,
+        pending: totalPending,
+        cleaned: totalFinal,
+        archived: 0,
+        last_24h: last24h,
+        last_session: sessionList.length > 0 ? (sessionList[0] as Record<string, unknown>).started_at : null,
+      },
     });
   } catch (error) {
-    console.error('Error fetching bucket counts:', error);
+    console.error("Error fetching bucket counts:", error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch buckets'
+      error: "Failed to fetch buckets"
     }, { status: 500 });
   }
 }

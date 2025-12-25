@@ -25,7 +25,7 @@ import {
 export type { ChatLogMessage, ConversationMessage };
 
 export function ClaudeTerminal({
-  projectPath = '/var/www/NextBid_Dev/dev-studio-5000',
+  projectPath = '/var/www/Studio',
   wsUrl,
   port = 5410,
   onMessage,

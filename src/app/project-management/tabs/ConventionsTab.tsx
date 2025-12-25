@@ -1,7 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Save, BookOpen, Code, Database, Globe, AlertTriangle, Folder } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, BookOpen, Code, Database, Globe, AlertTriangle, Folder, Clock } from 'lucide-react';
+
+const formatDate = (d: string) => {
+  const date = new Date(d);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 interface Convention {
   id: string;
@@ -16,6 +30,7 @@ interface Convention {
 interface ConventionsTabProps {
   projectPath: string;
   projectId: string;
+  projectName?: string;
   isParent?: boolean;
   childProjectIds?: string[];
 }
@@ -51,17 +66,15 @@ export default function ConventionsTab({ projectPath, projectId, isParent, child
     example: '',
   });
 
-  // Fetch project paths first (for parent aggregation)
+  // Fetch conventions directly using projectPath (like TodosTab)
+  useEffect(() => {
+    fetchConventionsDirect(projectPath);
+  }, [projectPath]);
+
+  // Also fetch project paths for multi-path aggregation
   useEffect(() => {
     fetchProjectPaths();
   }, [projectId, isParent, childProjectIds]);
-
-  // Fetch conventions when project paths are ready
-  useEffect(() => {
-    if (projectPaths.length > 0) {
-      fetchConventions();
-    }
-  }, [projectPaths]);
 
   const fetchProjectPaths = async () => {
     try {
@@ -89,6 +102,22 @@ export default function ConventionsTab({ projectPath, projectId, isParent, child
     } catch (error) {
       console.error('Error fetching project paths:', error);
       setProjectPaths([projectPath]);
+    }
+  };
+
+  const fetchConventionsDirect = async (path: string) => {
+    if (!path) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/project-management/api/conventions?project_path=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      if (data.success && data.conventions) {
+        setConventions(data.conventions);
+      }
+    } catch (error) {
+      console.error('Error fetching conventions:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -330,6 +359,10 @@ export default function ConventionsTab({ projectPath, projectId, isParent, child
                   <div className="flex items-center gap-2 mb-1">
                     <span className="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded">
                       {CATEGORIES.find(c => c.id === conv.convention_type)?.label || conv.convention_type}
+                    </span>
+                    <span className="flex items-center gap-1 text-gray-500 text-xs">
+                      <Clock className="w-3 h-3" />
+                      {formatDate(conv.created_at)}
                     </span>
                   </div>
                   <h4 className="text-white font-medium">{conv.name}</h4>

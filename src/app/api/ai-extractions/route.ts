@@ -1,98 +1,66 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Pool } from 'pg';
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
-const pool = new Pool({
-  host: '127.0.0.1',
-  port: 9432,
-  database: 'kodiack_ai',
-  user: 'postgres',
-  password: 'kodiack2025',
-});
-
-// Jen's 20 extraction buckets mapped to their tables
-// Some buckets share tables with a status/type column
-const BUCKET_QUERIES: Record<string, string> = {
-  'Bugs Open': "SELECT COUNT(*) FROM dev_ai_bugs WHERE status = 'open' OR status IS NULL",
-  'Bugs Fixed': "SELECT COUNT(*) FROM dev_ai_bugs WHERE status = 'fixed'",
-  'Todos': "SELECT COUNT(*) FROM dev_ai_knowledge WHERE category = 'todo'",
-  'Journal': "SELECT COUNT(*) FROM dev_ai_journal",
-  'Work Log': "SELECT COUNT(*) FROM dev_ai_knowledge WHERE category = 'work_log'",
-  'Ideas': "SELECT COUNT(*) FROM dev_ai_ideas",
-  'Decisions': "SELECT COUNT(*) FROM dev_ai_decisions",
-  'Lessons': "SELECT COUNT(*) FROM dev_ai_lessons",
-  'System Breakdown': "SELECT COUNT(*) FROM dev_ai_docs WHERE doc_type = 'system_breakdown'",
-  'How-To Guide': "SELECT COUNT(*) FROM dev_ai_docs WHERE doc_type = 'how_to'",
-  'Schematic': "SELECT COUNT(*) FROM dev_ai_docs WHERE doc_type = 'schematic'",
-  'Reference': "SELECT COUNT(*) FROM dev_ai_docs WHERE doc_type = 'reference'",
-  'Naming Conventions': "SELECT COUNT(*) FROM dev_ai_conventions WHERE convention_type = 'naming'",
-  'File Structure': "SELECT COUNT(*) FROM dev_ai_conventions WHERE convention_type = 'file_structure'",
-  'Database Patterns': "SELECT COUNT(*) FROM dev_ai_conventions WHERE convention_type = 'database'",
-  'API Patterns': "SELECT COUNT(*) FROM dev_ai_conventions WHERE convention_type = 'api'",
-  'Component Patterns': "SELECT COUNT(*) FROM dev_ai_conventions WHERE convention_type = 'component'",
-  'Quirks & Gotchas': "SELECT COUNT(*) FROM dev_ai_knowledge WHERE category = 'quirks'",
-  'Snippets': "SELECT COUNT(*) FROM dev_ai_knowledge WHERE category = 'snippet'",
-  'Other': "SELECT COUNT(*) FROM dev_ai_knowledge WHERE category = 'other' OR category IS NULL",
+// The 20 buckets mapped to their destination tables
+const BUCKET_TABLE_MAP: Record<string, { table: string; bucketFilter?: string }> = {
+  "Bugs Open": { table: "dev_ai_bugs", bucketFilter: "Bugs Open" },
+  "Bugs Fixed": { table: "dev_ai_bugs", bucketFilter: "Bugs Fixed" },
+  "Todos": { table: "dev_ai_todos" },
+  "Journal": { table: "dev_ai_journal", bucketFilter: "Journal" },
+  "Work Log": { table: "dev_ai_journal", bucketFilter: "Work Log" },
+  "Ideas": { table: "dev_ai_knowledge", bucketFilter: "Ideas" },
+  "Decisions": { table: "dev_ai_decisions" },
+  "Lessons": { table: "dev_ai_lessons" },
+  "System Breakdown": { table: "dev_ai_docs", bucketFilter: "System Breakdown" },
+  "How-To Guide": { table: "dev_ai_docs", bucketFilter: "How-To Guide" },
+  "Schematic": { table: "dev_ai_docs", bucketFilter: "Schematic" },
+  "Reference": { table: "dev_ai_docs", bucketFilter: "Reference" },
+  "Naming Conventions": { table: "dev_ai_conventions", bucketFilter: "Naming Conventions" },
+  "File Structure": { table: "dev_ai_conventions", bucketFilter: "File Structure" },
+  "Database Patterns": { table: "dev_ai_conventions", bucketFilter: "Database Patterns" },
+  "API Patterns": { table: "dev_ai_conventions", bucketFilter: "API Patterns" },
+  "Component Patterns": { table: "dev_ai_conventions", bucketFilter: "Component Patterns" },
+  "Quirks & Gotchas": { table: "dev_ai_knowledge", bucketFilter: "Quirks & Gotchas" },
+  "Snippets": { table: "dev_ai_snippets" },
+  "Other": { table: "dev_ai_knowledge", bucketFilter: "Other" },
 };
 
-// GET - Fetch extraction bucket counts from various tables
-export async function GET(request: NextRequest) {
+// GET - Fetch FLAGGED extraction bucket counts (Jen's work waiting for Susan)
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    const workspace = searchParams.get('workspace');
-
     const buckets: Record<string, number> = {};
+    let totalFlagged = 0;
 
-    // Query each bucket
-    for (const [bucketName, query] of Object.entries(BUCKET_QUERIES)) {
+    // Query each bucket - only count FLAGGED items using raw SQL
+    for (const [bucketName, config] of Object.entries(BUCKET_TABLE_MAP)) {
       try {
-        // Add workspace filter if provided (assuming tables have workspace column)
-        let finalQuery = query;
-        if (workspace && !query.includes('WHERE')) {
-          finalQuery = query.replace('SELECT COUNT(*)', `SELECT COUNT(*) FROM (${query}) sub WHERE workspace = '${workspace}'`);
-        } else if (workspace && query.includes('WHERE')) {
-          finalQuery = query + ` AND workspace = '${workspace}'`;
+        let sql = `SELECT COUNT(*) as count FROM ${config.table} WHERE status = 'flagged'`;
+        const params: string[] = [];
+        
+        if (config.bucketFilter) {
+          sql += " AND bucket = $1";
+          params.push(config.bucketFilter);
         }
-
-        const result = await pool.query(query); // Use original query for now
-        buckets[bucketName] = parseInt(result.rows[0]?.count || '0');
-      } catch (err) {
-        // Table or column might not exist yet
-        buckets[bucketName] = 0;
-      }
-    }
-
-    // Also get raw table totals for debugging
-    const totals: Record<string, number> = {};
-    const tableQueries = [
-      { name: 'bugs', query: 'SELECT COUNT(*) FROM dev_ai_bugs' },
-      { name: 'ideas', query: 'SELECT COUNT(*) FROM dev_ai_ideas' },
-      { name: 'decisions', query: 'SELECT COUNT(*) FROM dev_ai_decisions' },
-      { name: 'lessons', query: 'SELECT COUNT(*) FROM dev_ai_lessons' },
-      { name: 'journal', query: 'SELECT COUNT(*) FROM dev_ai_journal' },
-      { name: 'knowledge', query: 'SELECT COUNT(*) FROM dev_ai_knowledge' },
-      { name: 'docs', query: 'SELECT COUNT(*) FROM dev_ai_docs' },
-      { name: 'conventions', query: 'SELECT COUNT(*) FROM dev_ai_conventions' },
-    ];
-
-    for (const { name, query } of tableQueries) {
-      try {
-        const result = await pool.query(query);
-        totals[name] = parseInt(result.rows[0]?.count || '0');
+        
+        const result = await db.query<{ count: string }>(sql, params);
+        const c = parseInt((result.data as { count: string }[])?.[0]?.count || "0", 10);
+        buckets[bucketName] = c;
+        totalFlagged += c;
       } catch {
-        totals[name] = 0;
+        buckets[bucketName] = 0;
       }
     }
 
     return NextResponse.json({
       success: true,
       buckets,
-      totals,
+      totalFlagged,
     });
   } catch (error) {
-    console.error('Error fetching extraction counts:', error);
+    console.error("Error fetching extraction counts:", error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch extractions'
+      error: "Failed to fetch extractions"
     }, { status: 500 });
   }
 }

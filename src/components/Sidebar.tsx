@@ -227,6 +227,17 @@ export default function Sidebar() {
               <span>📁</span>
               <span>Projects</span>
             </Link>
+            <Link
+              href="/the-forge"
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname?.startsWith('/the-forge')
+                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              <span>🔥</span>
+              <span>The Forge</span>
+            </Link>
           </div>
         )}
 

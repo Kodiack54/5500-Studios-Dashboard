@@ -1,188 +1,90 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
 interface ProjectSummary {
   project_id: string;
-  project_path: string;
-  sessions: {
-    pending: number;
-    processed: number;
-    total: number;
-  };
-  todos: {
-    pending: number;
-    completed: number;
-    total: number;
-  };
-  knowledge: number;
+  pending_todos: number;
+  pending_bugs: number;
+  pending_knowledge: number;
+  pending_total: number;
+  todos: number;
   bugs: number;
-  code_changes: number;
-  last_activity: string | null;
+  knowledge: number;
+  docs: number;
+  total: number;
 }
 
-/**
- * GET /api/projects/summary
- * Get at-a-glance stats for all projects or a specific project
- *
- * Query params:
- *   project_path - Filter by specific project path
- *   project_id - Filter by project ID (looks up server_path from dev_projects)
- */
-export async function GET(request: NextRequest) {
+async function countByProjectAndStatus(table: string, projectId: string, status: string): Promise<number> {
   try {
-    const { searchParams } = new URL(request.url);
-    let projectPath = searchParams.get('project_path');
-    const projectId = searchParams.get('project_id');
-
-    // If project_id provided, look up the server_path
-    if (projectId && !projectPath) {
-      const { data: projectData } = await db
-        .from('dev_projects')
-        .select('server_path')
-        .eq('id', projectId)
-        .single();
-      const project = projectData as Record<string, unknown> | null;
-
-      if (project?.server_path) {
-        projectPath = String(project.server_path);
-      }
-    }
-
-    // Get all projects with their paths for mapping
-    const { data: projectsData } = await db
-      .from('dev_projects')
-      .select('id, name, slug, server_path')
-      .eq('is_active', true);
-    const projects = (projectsData || []) as Array<Record<string, unknown>>;
-
-    // If specific project requested
-    if (projectPath) {
-      const summary = await getProjectSummary(projectPath);
-      return NextResponse.json({
-        success: true,
-        summary
-      });
-    }
-
-    // Get summaries for all projects
-    const summaries: Record<string, ProjectSummary> = {};
-
-    for (const project of projects) {
-      if (project.server_path) {
-        summaries[String(project.id)] = await getProjectSummary(String(project.server_path));
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      summaries
-    });
-  } catch (error) {
-    console.error('Error in projects summary GET:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-// Helper to count rows
-async function countRows(table: string, filters: Array<{ column: string; value: unknown }>): Promise<number> {
-  try {
-    let whereClause = '';
-    const conditions: string[] = [];
-    const values: unknown[] = [];
-
-    filters.forEach((filter, i) => {
-      conditions.push(`${filter.column} = $${i + 1}`);
-      values.push(filter.value);
-    });
-
-    if (conditions.length > 0) {
-      whereClause = ` WHERE ${conditions.join(' AND ')}`;
-    }
-
-    const result = await db.query<{ count: string }>(`SELECT COUNT(*) as count FROM ${table}${whereClause}`, values);
-    const rows = result.data as Array<{ count: string }> | null;
-    return rows && rows[0] ? parseInt(rows[0].count, 10) : 0;
+    const sql = `SELECT COUNT(*) as count FROM ${table} WHERE project_id = $1 AND status = $2`;
+    const result = await db.query<{ count: string }>(sql, [projectId, status]);
+    return parseInt((result.data as { count: string }[])?.[0]?.count || "0", 10);
   } catch {
     return 0;
   }
 }
 
-async function getProjectSummary(projectPath: string): Promise<ProjectSummary> {
-  // Get counts using raw queries
-  const [
-    pendingSessions,
-    processedSessions,
-    pendingTodos,
-    completedTodos,
-    knowledgeCount,
-    bugsCount,
-    codeChangesCount,
-  ] = await Promise.all([
-    // Pending sessions
-    countRows('dev_ai_sessions', [
-      { column: 'status', value: 'pending_review' },
-      { column: 'project_path', value: projectPath },
-    ]),
+async function countFinalByProject(table: string, projectId: string): Promise<number> {
+  try {
+    const sql = `SELECT COUNT(*) as count FROM ${table} WHERE project_id = $1 AND status NOT IN ('flagged', 'pending')`;
+    const result = await db.query<{ count: string }>(sql, [projectId]);
+    return parseInt((result.data as { count: string }[])?.[0]?.count || "0", 10);
+  } catch {
+    return 0;
+  }
+}
 
-    // Processed sessions
-    countRows('dev_ai_sessions', [
-      { column: 'status', value: 'processed' },
-      { column: 'project_path', value: projectPath },
-    ]),
-
-    // Pending todos
-    countRows('dev_ai_todos', [
-      { column: 'project_path', value: projectPath },
-      { column: 'status', value: 'pending' },
-    ]),
-
-    // Completed todos
-    countRows('dev_ai_todos', [
-      { column: 'project_path', value: projectPath },
-      { column: 'status', value: 'completed' },
-    ]),
-
-    // Knowledge items
-    countRows('dev_ai_knowledge', [
-      { column: 'project_path', value: projectPath },
-    ]),
-
-    // Bugs
-    countRows('dev_ai_bugs', [
-      { column: 'project_path', value: projectPath },
-    ]),
-
-    // Code changes
-    countRows('dev_ai_code_changes', [
-      { column: 'project_path', value: projectPath },
-    ]),
+async function getProjectSummary(projectId: string): Promise<ProjectSummary> {
+  const [pendingTodos, pendingBugs, pendingKnowledge] = await Promise.all([
+    countByProjectAndStatus("dev_ai_todos", projectId, "pending"),
+    countByProjectAndStatus("dev_ai_bugs", projectId, "pending"),
+    countByProjectAndStatus("dev_ai_knowledge", projectId, "pending"),
   ]);
 
-  // Get last activity
-  const { data: lastSessionData } = await db
-    .from('dev_ai_sessions')
-    .select('started_at')
-    .eq('project_path', projectPath)
-    .order('started_at', { ascending: false })
-    .limit(1);
-  const lastSession = (lastSessionData || []) as Array<Record<string, unknown>>;
+  const [todos, bugs, knowledge, docs] = await Promise.all([
+    countFinalByProject("dev_ai_todos", projectId),
+    countFinalByProject("dev_ai_bugs", projectId),
+    countFinalByProject("dev_ai_knowledge", projectId),
+    countFinalByProject("dev_ai_docs", projectId),
+  ]);
 
   return {
-    project_id: '',
-    project_path: projectPath,
-    sessions: {
-      pending: pendingSessions,
-      processed: processedSessions,
-      total: pendingSessions + processedSessions
-    },
-    todos: {
-      pending: pendingTodos,
-      completed: completedTodos,
-      total: pendingTodos + completedTodos
-    },
-    knowledge: knowledgeCount,
-    bugs: bugsCount,
-    code_changes: codeChangesCount,
-    last_activity: lastSession[0]?.started_at ? String(lastSession[0].started_at) : null
+    project_id: projectId,
+    pending_todos: pendingTodos,
+    pending_bugs: pendingBugs,
+    pending_knowledge: pendingKnowledge,
+    pending_total: pendingTodos + pendingBugs + pendingKnowledge,
+    todos,
+    bugs,
+    knowledge,
+    docs,
+    total: todos + bugs + knowledge + docs,
   };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get("project_id");
+
+    if (projectId) {
+      const summary = await getProjectSummary(projectId);
+      return NextResponse.json({ success: true, summary });
+    }
+
+    const { data: projects } = await db.from("dev_projects")
+      .select("id, name, slug, server_path")
+      .eq("is_active", true);
+
+    const summaries: Record<string, ProjectSummary> = {};
+    for (const project of (projects || []) as Array<Record<string, unknown>>) {
+      const pid = String(project.id);
+      summaries[pid] = await getProjectSummary(pid);
+    }
+
+    return NextResponse.json({ success: true, summaries });
+  } catch (error) {
+    console.error("Error in projects summary:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

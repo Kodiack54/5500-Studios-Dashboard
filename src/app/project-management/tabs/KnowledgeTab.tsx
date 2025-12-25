@@ -12,13 +12,15 @@ interface ProjectPath {
   created_at: string;
 }
 
-interface JournalEntry {
+interface KnowledgeEntry {
   id: string;
   project_path: string;
-  type: 'work_log' | 'idea' | 'decision' | 'lesson';
+  category: string;
   title: string;
+  summary?: string;
   content: string;
   author?: string;
+  source?: string;
   created_at: string;
   updated_at: string;
 }
@@ -31,68 +33,68 @@ interface KnowledgeTabProps {
   childProjectIds?: string[];
 }
 
-const TYPE_CONFIG = {
-  work_log: {
+// Category config - matches database category values
+const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string; activeColor: string; description: string }> = {
+  'Work Log': {
     label: 'Work Log',
     icon: FileText,
     color: 'bg-blue-600/20 text-blue-400 border-blue-500',
     activeColor: 'bg-blue-600 text-white',
     description: 'What was done, when, by who',
   },
-  idea: {
+  'Ideas': {
     label: 'Ideas',
     icon: Lightbulb,
     color: 'bg-yellow-600/20 text-yellow-400 border-yellow-500',
     activeColor: 'bg-yellow-600 text-white',
     description: 'Future features, improvements',
   },
-  decision: {
+  'Decisions': {
     label: 'Decisions',
     icon: Scale,
     color: 'bg-purple-600/20 text-purple-400 border-purple-500',
     activeColor: 'bg-purple-600 text-white',
     description: 'Why things were built this way',
   },
-  lesson: {
-    label: 'Lessons',
+  'Journal': {
+    label: 'Journal',
     icon: GraduationCap,
     color: 'bg-green-600/20 text-green-400 border-green-500',
     activeColor: 'bg-green-600 text-white',
-    description: 'What worked, what didn\'t',
+    description: 'Session notes and learnings',
   },
 };
 
-type EntryType = keyof typeof TYPE_CONFIG;
+// Default categories to show in tabs
+const DEFAULT_CATEGORIES = ['Work Log', 'Ideas', 'Decisions', 'Journal'];
 
 export default function KnowledgeTab({ projectPath, projectId, projectName, isParent, childProjectIds }: KnowledgeTabProps) {
   const [projectPaths, setProjectPaths] = useState<ProjectPath[]>([]);
   const [selectedPath, setSelectedPath] = useState<ProjectPath | null>(null);
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
-  const [grouped, setGrouped] = useState<Record<string, JournalEntry[]>>({});
+  const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
+  const [grouped, setGrouped] = useState<Record<string, KnowledgeEntry[]>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<EntryType>('work_log');
+  const [activeCategory, setActiveCategory] = useState<string>('Work Log');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<KnowledgeEntry | null>(null);
   const [formData, setFormData] = useState({
-    type: 'work_log' as EntryType,
+    category: 'Work Log',
     title: '',
     content: '',
     author: '',
   });
 
-  // Fetch project paths
+  // Fetch knowledge directly using projectPath (like TodosTab)
+  useEffect(() => {
+    fetchKnowledge(projectPath);
+  }, [projectPath]);
+
+  // Also fetch project paths for folder selector
   useEffect(() => {
     fetchProjectPaths();
   }, [projectId]);
-
-  // Fetch knowledge when path changes
-  useEffect(() => {
-    if (selectedPath) {
-      fetchKnowledge(selectedPath.path);
-    }
-  }, [selectedPath]);
 
   const fetchProjectPaths = async () => {
     try {
@@ -157,10 +159,11 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
   };
 
   const fetchKnowledge = async (path: string) => {
+    if (!path) return;
     setIsLoading(true);
     try {
-      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const response = await fetch(`/project-management/api/clair/knowledge/${cleanPath}`);
+      const projectId = path.startsWith('/') ? path.slice(1) : path;
+      const response = await fetch(`/project-management/api/clair/knowledge/${projectId}`);
       const data = await response.json();
       if (data.success) {
         setEntries(data.entries || []);
@@ -176,10 +179,10 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
   const handleSubmit = async () => {
     if (!formData.title || !formData.content || !selectedPath) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       const url = editingEntry
-        ? `/project-management/api/clair/knowledge/${cleanPath}/${editingEntry.id}`
-        : `/project-management/api/clair/knowledge/${cleanPath}`;
+        ? `/project-management/api/clair/knowledge/${projectId}/${editingEntry.id}`
+        : `/project-management/api/clair/knowledge/${projectId}`;
       const method = editingEntry ? 'PATCH' : 'POST';
 
       await fetch(url, {
@@ -194,21 +197,21 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
     }
   };
 
-  const handleDelete = async (entry: JournalEntry) => {
-    if (!confirm('Delete this entry?') || !selectedPath) return;
+  const handleDelete = async (entry: KnowledgeEntry) => {
+    if (!confirm('Delete this entry?')) return;
     try {
-      const cleanPath = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
-      await fetch(`/project-management/api/clair/knowledge/${cleanPath}/${entry.id}`, { method: 'DELETE' });
-      fetchKnowledge(selectedPath.path);
+      const projectId = projectPath.startsWith('/') ? projectPath.slice(1) : projectPath;
+      await fetch(`/project-management/api/clair/knowledge/${projectId}/${entry.id}`, { method: 'DELETE' });
+      fetchKnowledge(projectPath);
     } catch (error) {
       console.error('Error deleting entry:', error);
     }
   };
 
-  const startEdit = (entry: JournalEntry) => {
+  const startEdit = (entry: KnowledgeEntry) => {
     setEditingEntry(entry);
     setFormData({
-      type: entry.type,
+      category: entry.category,
       title: entry.title,
       content: entry.content,
       author: entry.author || '',
@@ -219,7 +222,7 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
   const resetForm = () => {
     setShowAddForm(false);
     setEditingEntry(null);
-    setFormData({ type: activeTab, title: '', content: '', author: '' });
+    setFormData({ category: activeCategory, title: '', content: '', author: '' });
   };
 
   const toggleExpand = (id: string) => {
@@ -235,13 +238,13 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const currentEntries = (grouped[activeTab] || []).filter(entry => {
+  const currentEntries = (grouped[activeCategory] || []).filter(entry => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return entry.title.toLowerCase().includes(q) || entry.content.toLowerCase().includes(q);
   });
 
-  const config = TYPE_CONFIG[activeTab];
+  const config = CATEGORY_CONFIG[activeCategory] || CATEGORY_CONFIG['Work Log'];
   const Icon = config.icon;
 
   return (
@@ -312,7 +315,7 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
                 </div>
                 <button
                   onClick={() => {
-                    setFormData({ ...formData, type: activeTab });
+                    setFormData({ ...formData, category: activeCategory });
                     setShowAddForm(true);
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm"
@@ -322,16 +325,17 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
                 </button>
               </div>
 
-              {/* Type Tabs */}
+              {/* Category Tabs */}
               <div className="flex px-3 -mb-px">
-                {(Object.entries(TYPE_CONFIG) as [EntryType, typeof TYPE_CONFIG.work_log][]).map(([key, cfg]) => {
+                {DEFAULT_CATEGORIES.map((cat) => {
+                  const cfg = CATEGORY_CONFIG[cat] || CATEGORY_CONFIG['Work Log'];
                   const TabIcon = cfg.icon;
-                  const count = grouped[key]?.length || 0;
-                  const isActive = activeTab === key;
+                  const count = grouped[cat]?.length || 0;
+                  const isActive = activeCategory === cat;
                   return (
                     <button
-                      key={key}
-                      onClick={() => setActiveTab(key)}
+                      key={cat}
+                      onClick={() => setActiveCategory(cat)}
                       className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                         isActive
                           ? `${cfg.activeColor} border-current`
@@ -360,7 +364,7 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
               <div className="p-4 border-b border-gray-700 bg-gray-750 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-white font-medium">
-                    {editingEntry ? 'Edit Entry' : `New ${TYPE_CONFIG[formData.type].label} Entry`}
+                    {editingEntry ? 'Edit Entry' : `New ${(CATEGORY_CONFIG[formData.category] || CATEGORY_CONFIG['Work Log']).label} Entry`}
                   </h4>
                   <button onClick={resetForm} className="text-gray-500 hover:text-white">
                     <X className="w-4 h-4" />
@@ -368,12 +372,12 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <select
-                    value={formData.type}
-                    onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as EntryType }))}
+                    value={formData.category}
+                    onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
                     className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                   >
-                    {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
-                      <option key={key} value={key}>{cfg.label}</option>
+                    {DEFAULT_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>{(CATEGORY_CONFIG[cat] || {}).label || cat}</option>
                     ))}
                   </select>
                   <input

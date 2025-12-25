@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 // ALL data comes from DATABASE - no HTTP calls to workers
@@ -68,6 +68,7 @@ interface Project {
   todos: number;
   knowledge: number;
   bugs: number;
+  children?: Project[];
 }
 
 export default function SessionLogsPage() {
@@ -118,25 +119,63 @@ export default function SessionLogsPage() {
       if (extractionsData.success) {
         setJenBuckets(extractionsData.buckets || {});
       }
-
-      // Merge projects list with summaries - only parent projects (no parent_id)
+      // Build parent projects with aggregated children stats
       if (projectsListData.success && projectsListData.projects) {
+        const allProjects = projectsListData.projects;
         const summaries = projectsSummaryData.success ? projectsSummaryData.summaries || {} : {};
-        const parentProjects = projectsListData.projects
-          .filter((p: { parent_id?: string | null }) => !p.parent_id)
-          .map((p: { id: string; name: string; slug?: string; server_path?: string }) => {
-            const summary = summaries[p.id] || {};
-            return {
-              id: p.id,
-              name: p.name,
-              slug: p.slug,
-              server_path: p.server_path,
-              parent_id: null,
-              todos: summary.todos?.total || 0,
-              knowledge: summary.knowledge || 0,
-              bugs: summary.bugs || 0,
-            };
-          });
+
+        // Create a map of all projects with their stats
+        const projectMap: Record<string, Project> = {};
+        for (const p of allProjects) {
+          const summary = summaries[p.id] || {};
+          projectMap[p.id] = {
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            server_path: p.server_path,
+            parent_id: p.parent_id || null,
+            todos: summary.pending_todos || summary.todos || 0,
+            knowledge: summary.pending_knowledge || summary.knowledge || 0,
+            bugs: summary.pending_bugs || summary.bugs || 0,
+            children: [],
+          };
+        }
+
+        // Group children under parents and aggregate stats
+        const parentProjects: Project[] = [];
+
+        for (const p of allProjects) {
+          const project = projectMap[p.id];
+
+          if (!project.parent_id) {
+            // This is a parent project - find all children and aggregate
+            const children: Project[] = [];
+            let totalTodos = project.todos;
+            let totalKnowledge = project.knowledge;
+            let totalBugs = project.bugs;
+
+            for (const child of allProjects) {
+              if (child.parent_id === p.id) {
+                const childProject = projectMap[child.id];
+                children.push(childProject);
+                totalTodos += childProject.todos;
+                totalKnowledge += childProject.knowledge;
+                totalBugs += childProject.bugs;
+              }
+            }
+
+            parentProjects.push({
+              ...project,
+              todos: totalTodos,
+              knowledge: totalKnowledge,
+              bugs: totalBugs,
+              children: children.sort((a, b) => a.name.localeCompare(b.name)),
+            });
+          }
+        }
+
+        // Sort parents alphabetically
+        parentProjects.sort((a, b) => a.name.localeCompare(b.name));
         setProjects(parentProjects);
       }
 
@@ -188,9 +227,10 @@ export default function SessionLogsPage() {
   // Flow: active → captured → flagged → pending → cleaned → archived
   const totals = {
     active: Number(stats?.active || buckets['active'] || 0),
-    captured: Number(stats?.captured || buckets['captured'] || 0),
+    processed: Number(stats?.scrubbed || buckets["processed"] || buckets["pending_review"] || 0),
     flagged: Number(stats?.flagged || buckets['flagged'] || 0),
-    pending: Number(stats?.pending || buckets['pending'] || 0),
+    pending: Number(stats?.pending || buckets["pending"] || 0),
+    published: Number(buckets["published"] || buckets["cataloged"] || 0),
     cleaned: Number(stats?.cleaned || buckets['cleaned'] || 0),
     archived: Number(stats?.archived || buckets['archived'] || 0),
     total: Number(stats?.total_sessions || Object.values(buckets).reduce((sum, c) => sum + Number(c), 0)),
@@ -269,11 +309,13 @@ export default function SessionLogsPage() {
           <div className="flex items-center justify-around">
             <TotalStat label="Active" value={totals.active} color="cyan" />
             <PipelineArrow />
-            <TotalStat label="Captured" value={totals.captured} color="blue" />
+            <TotalStat label="Processed" value={totals.processed} color="blue" />
             <PipelineArrow />
             <TotalStat label="Flagged" value={totals.flagged} color="purple" />
             <PipelineArrow />
             <TotalStat label="Pending" value={totals.pending} color="yellow" />
+            <PipelineArrow />
+            <TotalStat label="Published" value={totals.published} color="indigo" />
             <PipelineArrow />
             <TotalStat label="Cleaned" value={totals.cleaned} color="teal" />
             <PipelineArrow />
@@ -287,7 +329,7 @@ export default function SessionLogsPage() {
         {/* 1/4 Pipeline Buckets (compact) */}
         <div className="flex-1 px-3 py-2 bg-gray-800/50">
           <div className="space-y-0.5">
-            {['active', 'captured', 'flagged', 'pending', 'cleaned', 'archived'].map(name => (
+            {['active', 'processed', 'cleaned', 'archived'].map(name => (
               <div key={name} className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 capitalize">{name}</span>
                 <span className="font-mono font-bold text-white">{buckets[name] || 0}</span>
@@ -423,7 +465,8 @@ function SessionItem({ session }: { session: Session }) {
   // Pipeline: active → captured → flagged → pending → cleaned → archived
   const statusColors: Record<string, string> = {
     active: 'bg-cyan-900/50 text-cyan-400',
-    captured: 'bg-blue-900/50 text-blue-400',
+    processed: "bg-blue-900/50 text-blue-400",
+    published: "bg-indigo-900/50 text-indigo-400",
     flagged: 'bg-purple-900/50 text-purple-400',
     pending: 'bg-yellow-900/50 text-yellow-400',
     cleaned: 'bg-teal-900/50 text-teal-400',
@@ -451,7 +494,8 @@ function SessionItem({ session }: { session: Session }) {
 function BucketRow({ name, count }: { name: string; count: number }) {
   const bucketColors: Record<string, string> = {
     active: 'bg-cyan-900/20',
-    captured: 'bg-blue-900/20',
+    processed: "bg-blue-900/20",
+    published: "bg-indigo-900/20",
     flagged: 'bg-purple-900/20',
     pending: 'bg-yellow-900/20',
     cleaned: 'bg-teal-900/20',
@@ -472,33 +516,92 @@ function BucketRow({ name, count }: { name: string; count: number }) {
 
 // Project card for Susan's column - clickable to project management page
 function ProjectCard({ project }: { project: Project }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasChildren = project.children && project.children.length > 0;
   const total = project.todos + project.knowledge + project.bugs;
+
   return (
-    <Link
-      href={`/project-management?project=${project.slug}&allClients=true`}
-      className="block p-2 rounded border border-gray-700 bg-gray-800/50 hover:bg-gray-700/50 hover:border-gray-500 transition-colors cursor-pointer"
-    >
-      <div className="flex items-center justify-between">
-        <div className="font-medium text-white text-sm truncate">{project.name}</div>
-        {total > 0 && (
-          <span className="text-xs text-gray-400 ml-2">{total}</span>
+    <div className="rounded border border-gray-700 bg-gray-800/50 overflow-hidden">
+      <div
+        className="p-2 flex items-center gap-2 hover:bg-gray-700/50 cursor-pointer"
+        onClick={() => hasChildren && setExpanded(!expanded)}
+      >
+        {hasChildren ? (
+          expanded ? (
+            <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+          )
+        ) : (
+          <div className="w-4 shrink-0" />
         )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <Link
+              href={`/project-management?project=${project.slug}&allClients=true`}
+              className="font-medium text-white text-sm truncate hover:text-blue-400"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {project.name}
+            </Link>
+            {total > 0 && (
+              <span className="text-xs text-gray-400 ml-2 shrink-0">{total}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs">
+            <span className={project.todos > 0 ? 'text-blue-400' : 'text-gray-600'}>
+              To-do: {project.todos}
+            </span>
+            <span className={project.knowledge > 0 ? 'text-green-400' : 'text-gray-600'}>
+              Knowledge: {project.knowledge}
+            </span>
+            <span className={project.bugs > 0 ? 'text-red-400' : 'text-gray-600'}>
+              Bugs: {project.bugs}
+            </span>
+            {hasChildren && (
+              <span className="text-gray-500">
+                ({project.children!.length} projects)
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="flex items-center gap-3 mt-1.5 text-xs">
-        <span className={project.todos > 0 ? 'text-blue-400' : 'text-gray-600'}>
-          To-do: {project.todos}
-        </span>
-        <span className={project.knowledge > 0 ? 'text-green-400' : 'text-gray-600'}>
-          Knowledge: {project.knowledge}
-        </span>
-        <span className={project.bugs > 0 ? 'text-red-400' : 'text-gray-600'}>
-          Bugs: {project.bugs}
-        </span>
-      </div>
-    </Link>
+
+      {expanded && hasChildren && (
+        <div className="border-t border-gray-700 bg-gray-900/50">
+          {project.children!.map(child => {
+            const childTotal = child.todos + child.knowledge + child.bugs;
+            return (
+              <Link
+                key={child.id}
+                href={`/project-management?project=${child.slug}&allClients=true`}
+                className="block p-2 pl-8 hover:bg-gray-700/30 border-b border-gray-700/50 last:border-b-0"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300 truncate">{child.name}</span>
+                  {childTotal > 0 && (
+                    <span className="text-xs text-gray-500 ml-2">{childTotal}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-0.5 text-[11px]">
+                  <span className={child.todos > 0 ? 'text-blue-400/80' : 'text-gray-600'}>
+                    {child.todos}
+                  </span>
+                  <span className={child.knowledge > 0 ? 'text-green-400/80' : 'text-gray-600'}>
+                    {child.knowledge}
+                  </span>
+                  <span className={child.bugs > 0 ? 'text-red-400/80' : 'text-gray-600'}>
+                    {child.bugs}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
-
 // Health badge
 function HealthBadge({ health }: { health: 'healthy' | 'degraded' | 'down' }) {
   const config = {

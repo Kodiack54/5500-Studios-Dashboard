@@ -7,6 +7,7 @@ import { Note } from '../types';
 interface NotepadTabProps {
   projectPath: string;
   projectId: string;
+  projectName?: string;
   isParent?: boolean;
   childProjectIds?: string[];
 }
