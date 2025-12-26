@@ -1,0 +1,16 @@
+--- page.tsx.orig	2025-01-01 00:00:00.000000000 +0000
++++ page.tsx	2025-01-01 00:00:00.000000000 +0000
+@@ -15,6 +15,13 @@
+   { id: 'dev3', name: 'Dev Team 3', workspace: 'dev3' },
+ ];
+ 
++// Chad's 3 capture sources
++const CAPTURE_SOURCES = [
++  { id: 'external_claude', name: 'External Claude', label: 'Local' },
++  { id: 'chat_systems', name: 'Chat Systems', label: 'Chat' },
++  { id: 'internal_claude', name: 'Internal Claude', label: 'Server' },
++];
++
+ // Jen's 20 extraction buckets
+ const JEN_BUCKETS = [
+   'Bugs Open', 'Bugs Fixed', 'Todos', 'Journal', 'Work Log', 'Ideas',

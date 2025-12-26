@@ -28,6 +28,15 @@ interface WorkerStatus {
 
 // Check individual worker health by hitting their /health endpoint
 async function checkWorkerHealth(worker: typeof AI_WORKERS[0]): Promise<WorkerStatus> {
+  // Dashboard is always online - we're serving this request from it!
+  if (worker.id === 'dashboard') {
+    return {
+      id: worker.id,
+      status: 'online',
+      lastHeartbeat: new Date().toISOString(),
+    };
+  }
+
   const startTime = Date.now();
 
   try {

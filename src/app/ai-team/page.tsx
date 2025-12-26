@@ -4,14 +4,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, AlertTriangle, CheckCircle, XCircle, Play, RotateCcw, Square, DollarSign, Zap, Clock, Bell } from 'lucide-react';
 
 // AI Team Members with model info and budget limits
+// ALL workers have $0.50/day HARD LIMIT as safety net
+// OpenAI workers are subscription-based (no extra cost) but still monitored
+// Claude workers (Jen, Clair) cost real money - enforce strictly
 const AI_TEAM = [
   { id: 'chad', name: 'Chad', port: 5401, role: 'Capture', title: 'Information Capture', model: 'openai', dailyLimit: 0.50, color: 'cyan' },
-  { id: 'jen', name: 'Jen', port: 5402, role: 'Extract', title: 'Data Quality', model: 'claude', dailyLimit: 1.50, color: 'purple' },
+  { id: 'jen', name: 'Jen', port: 5402, role: 'Extract', title: 'Data Quality', model: 'claude', dailyLimit: 0.50, color: 'purple' },
   { id: 'susan', name: 'Susan', port: 5403, role: 'Sort', title: 'Information Analyst', model: 'openai', dailyLimit: 0.50, color: 'pink' },
-  { id: 'clair', name: 'Clair', port: 5404, role: 'Document', title: 'Documentation', model: 'claude', dailyLimit: 2.00, color: 'blue' },
-  { id: 'mike', name: 'Mike', port: 5405, role: 'QA', title: 'Quality Assurance', model: 'openai', dailyLimit: 0.25, color: 'green' },
-  { id: 'tiffany', name: 'Tiffany', port: 5406, role: 'QA', title: 'Quality Assurance', model: 'openai', dailyLimit: 0.25, color: 'yellow' },
-  { id: 'ryan', name: 'Ryan', port: 5407, role: 'Roadmap', title: 'Product Operations', model: 'openai', dailyLimit: 0.25, color: 'orange' },
+  { id: 'clair', name: 'Clair', port: 5404, role: 'Document', title: 'Documentation', model: 'claude', dailyLimit: 0.50, color: 'blue' },
+  { id: 'mike', name: 'Mike', port: 5405, role: 'QA', title: 'Quality Assurance', model: 'openai', dailyLimit: 0.50, color: 'green' },
+  { id: 'tiffany', name: 'Tiffany', port: 5406, role: 'QA', title: 'Quality Assurance', model: 'openai', dailyLimit: 0.50, color: 'yellow' },
+  { id: 'ryan', name: 'Ryan', port: 5407, role: 'Roadmap', title: 'Product Operations', model: 'openai', dailyLimit: 0.50, color: 'orange' },
 ];
 
 // Infrastructure services
@@ -47,7 +50,7 @@ export default function AITeamPage() {
   const [workerUsage, setWorkerUsage] = useState<Record<string, WorkerUsage>>({});
   const [pipelineStats, setPipelineStats] = useState<PipelineStats | null>(null);
   const [totalCostToday, setTotalCostToday] = useState(0);
-  const [dailyBudget] = useState(5.00); // Total daily budget
+  const [dailyBudget] = useState(3.50); // Total daily budget (7 workers × $0.50)
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -204,23 +207,23 @@ export default function AITeamPage() {
         </div>
       )}
 
-      {/* Stats Row - Compact */}
-      <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 shrink-0">
-        <div className="flex items-center gap-6">
-          <Stat icon={Zap} label="Sessions" value={pipelineStats?.sessions_today || 0} color="cyan" />
-          <Stat icon={Zap} label="Extracted" value={pipelineStats?.extractions_today || 0} color="purple" />
-          <Stat icon={CheckCircle} label="Published" value={pipelineStats?.docs_published || 0} color="green" />
-          <Stat icon={Clock} label="Pending" value={pipelineStats?.pending || 0} color="yellow" />
-          <div className="flex-1" />
-          {/* Budget Bar */}
-          <div className="w-48">
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-gray-400">Daily Budget</span>
-              <span className={budgetAlert ? 'text-red-400' : 'text-gray-400'}>{budgetPercent.toFixed(0)}%</span>
+      {/* Stats Row - 6 Tiles */}
+      <div className="px-4 py-3 bg-gray-800/50 border-b border-gray-700 shrink-0">
+        <div className="grid grid-cols-6 gap-3">
+          <StatCard icon={Zap} label="Sessions Today" value={pipelineStats?.sessions_today || 0} color="cyan" />
+          <StatCard icon={Zap} label="Extracted" value={pipelineStats?.extractions_today || 0} color="purple" />
+          <StatCard icon={CheckCircle} label="Published" value={pipelineStats?.docs_published || 0} color="green" />
+          <StatCard icon={Clock} label="Pending" value={pipelineStats?.pending || 0} color="yellow" />
+          <StatCard icon={DollarSign} label="AI Cost Today" value={`$${totalCostToday.toFixed(2)}`} color="orange" isString />
+          <div className="p-2 rounded-lg bg-gray-800/50 border border-gray-700">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className={`w-4 h-4 ${budgetAlert ? 'text-red-400' : 'text-blue-400'}`} />
+              <span className="text-xs text-gray-400">Budget Used</span>
             </div>
-            <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div className="text-lg font-bold text-white">{budgetPercent.toFixed(0)}%</div>
+            <div className="h-1 bg-gray-700 rounded-full overflow-hidden mt-1">
               <div
-                className={`h-full transition-all ${budgetPercent > 90 ? 'bg-red-500' : budgetPercent > 70 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                className={`h-full ${budgetPercent > 90 ? 'bg-red-500' : budgetPercent > 70 ? 'bg-yellow-500' : 'bg-green-500'}`}
                 style={{ width: `${Math.min(budgetPercent, 100)}%` }}
               />
             </div>
@@ -228,10 +231,10 @@ export default function AITeamPage() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - 2/3 list, 1/3 budget */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Workers List - Compact */}
-        <div className="flex-1 overflow-auto p-2">
+        {/* Workers List - 2/3 width */}
+        <div className="flex-[2] overflow-auto p-2">
           <div className="space-y-1">
             {AI_TEAM.map(worker => (
               <WorkerRow
@@ -260,8 +263,8 @@ export default function AITeamPage() {
           </div>
         </div>
 
-        {/* Right Panel - Budget Alerts & Limits */}
-        <div className="w-64 border-l border-gray-700 bg-gray-800/30 p-3 overflow-auto">
+        {/* Right Panel - Budget Alerts & Limits - 1/3 width */}
+        <div className="flex-1 border-l border-gray-700 bg-gray-800/30 p-3 overflow-auto">
           <div className="text-sm font-medium text-gray-300 mb-2">Budget Limits</div>
           <div className="space-y-2">
             {AI_TEAM.map(worker => {
@@ -344,20 +347,32 @@ export default function AITeamPage() {
   );
 }
 
-// Compact Stat
-function Stat({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: number; color: string }) {
+// Stat Card for top row
+function StatCard({ icon: Icon, label, value, color, isString = false }: {
+  icon: React.ElementType;
+  label: string;
+  value: number | string;
+  color: string;
+  isString?: boolean;
+}) {
   const colors: Record<string, string> = {
     cyan: 'text-cyan-400',
     purple: 'text-purple-400',
     green: 'text-green-400',
     yellow: 'text-yellow-400',
+    orange: 'text-orange-400',
+    blue: 'text-blue-400',
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Icon className={`w-4 h-4 ${colors[color]}`} />
-      <span className={`font-bold ${colors[color]}`}>{value}</span>
-      <span className="text-xs text-gray-500">{label}</span>
+    <div className="p-2 rounded-lg bg-gray-800/50 border border-gray-700">
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className={`w-4 h-4 ${colors[color]}`} />
+        <span className="text-xs text-gray-400">{label}</span>
+      </div>
+      <div className={`text-lg font-bold ${colors[color]}`}>
+        {isString ? value : (value as number).toLocaleString()}
+      </div>
     </div>
   );
 }
