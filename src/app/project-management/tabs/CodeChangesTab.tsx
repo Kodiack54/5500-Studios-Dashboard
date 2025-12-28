@@ -85,10 +85,10 @@ export default function CodeChangesTab({ projectPath, projectId }: CodeChangesTa
   }, [projectId]);
 
   useEffect(() => {
-    if (selectedPath) {
-      fetchConventions(selectedPath.path);
+    if (projectId) {
+      fetchConventions();
     }
-  }, [selectedPath]);
+  }, [projectId]);
 
   const fetchProjectPaths = async () => {
     try {
@@ -143,10 +143,10 @@ export default function CodeChangesTab({ projectPath, projectId }: CodeChangesTa
     } catch (error) { console.error('Error moving folder:', error); fetchProjectPaths(); }
   };
 
-  const fetchConventions = async (path: string) => {
+  const fetchConventions = async () => {
+    if (!projectId) return;
     setIsLoading(true);
     try {
-      const projectId = path.startsWith('/') ? path.slice(1) : path;
       const response = await fetch(`/project-management/api/clair/conventions/${projectId}`);
       const data = await response.json();
       if (data.success) {
@@ -160,9 +160,8 @@ export default function CodeChangesTab({ projectPath, projectId }: CodeChangesTa
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.description || !selectedPath) return;
+    if (!formData.name || !formData.description || !projectId) return;
     try {
-      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       const url = editingConvention
         ? `/project-management/api/clair/conventions/${projectId}/${editingConvention.id}`
         : `/project-management/api/clair/conventions/${projectId}`;
@@ -179,18 +178,17 @@ export default function CodeChangesTab({ projectPath, projectId }: CodeChangesTa
         body: JSON.stringify(payload),
       });
       resetForm();
-      fetchConventions(selectedPath.path);
+      fetchConventions();
     } catch (error) {
       console.error('Error saving convention:', error);
     }
   };
 
   const handleDelete = async (convention: Convention) => {
-    if (!confirm('Delete this convention?') || !selectedPath) return;
+    if (!confirm('Delete this convention?') || !projectId) return;
     try {
-      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       await fetch(`/project-management/api/clair/conventions/${projectId}/${convention.id}`, { method: 'DELETE' });
-      fetchConventions(selectedPath.path);
+      fetchConventions();
     } catch (error) {
       console.error('Error deleting convention:', error);
     }

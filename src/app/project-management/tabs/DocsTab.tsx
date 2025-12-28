@@ -96,10 +96,10 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
     category: '',
   });
 
-  // Fetch docs directly using projectPath (like TodosTab)
+  // Fetch docs using projectId (UUID)
   useEffect(() => {
-    fetchDocs(projectPath);
-  }, [projectPath]);
+    fetchDocs();
+  }, [projectId]);
 
   // Also fetch project paths for folder selector
   useEffect(() => {
@@ -168,11 +168,10 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
     } catch (error) { console.error('Error moving folder:', error); fetchProjectPaths(); }
   };
 
-  const fetchDocs = async (path: string) => {
-    if (!path) return;
+  const fetchDocs = async () => {
+    if (!projectId) return;
     setIsLoading(true);
     try {
-      const projectId = path.startsWith('/') ? path.slice(1) : path;
       const response = await fetch(`/project-management/api/clair/docs/${projectId}`);
       const data = await response.json();
       if (data.success) {
@@ -193,9 +192,8 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
   };
 
   const handleSubmit = async () => {
-    if (!formData.title || !formData.content || !selectedPath) return;
+    if (!formData.title || !formData.content || !projectId) return;
     try {
-      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       const url = editingDoc
         ? `/project-management/api/clair/docs/${projectId}/${editingDoc.id}`
         : `/project-management/api/clair/docs/${projectId}`;
@@ -207,19 +205,18 @@ export default function DocsTab({ projectPath, projectId, projectName, isParent,
         body: JSON.stringify(formData),
       });
       resetForm();
-      fetchDocs(selectedPath.path);
+      fetchDocs();
     } catch (error) {
       console.error('Error saving doc:', error);
     }
   };
 
   const handleDelete = async (doc: Doc) => {
-    if (!confirm('Delete this document?') || !selectedPath) return;
+    if (!confirm('Delete this document?') || !projectId) return;
     try {
-      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       await fetch(`/project-management/api/clair/docs/${projectId}/${doc.id}`, { method: 'DELETE' });
       if (selectedDoc?.id === doc.id) setSelectedDoc(null);
-      fetchDocs(selectedPath.path);
+      fetchDocs();
     } catch (error) {
       console.error('Error deleting doc:', error);
     }
