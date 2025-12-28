@@ -11,6 +11,7 @@ interface ProjectSummary {
   bugs: number;
   knowledge: number;
   docs: number;
+  conventions: number;
   total: number;
 }
 
@@ -24,10 +25,13 @@ async function countByProjectAndStatus(table: string, projectId: string, status:
   }
 }
 
-async function countFinalByProject(table: string, projectId: string): Promise<number> {
+async function countByProject(table: string, projectId: string, status?: string): Promise<number> {
   try {
-    const sql = `SELECT COUNT(*) as count FROM ${table} WHERE project_id = $1 AND status NOT IN ('flagged', 'pending')`;
-    const result = await db.query<{ count: string }>(sql, [projectId]);
+    const sql = status
+      ? `SELECT COUNT(*) as count FROM ${table} WHERE project_id = $1 AND status = $2`
+      : `SELECT COUNT(*) as count FROM ${table} WHERE project_id = $1`;
+    const params = status ? [projectId, status] : [projectId];
+    const result = await db.query<{ count: string }>(sql, params);
     return parseInt((result.data as { count: string }[])?.[0]?.count || "0", 10);
   } catch {
     return 0;
@@ -35,17 +39,20 @@ async function countFinalByProject(table: string, projectId: string): Promise<nu
 }
 
 async function getProjectSummary(projectId: string): Promise<ProjectSummary> {
+  // Pending counts use correct status per table type
   const [pendingTodos, pendingBugs, pendingKnowledge] = await Promise.all([
-    countByProjectAndStatus("dev_ai_todos", projectId, "pending"),
-    countByProjectAndStatus("dev_ai_bugs", projectId, "pending"),
+    countByProjectAndStatus("dev_ai_todos", projectId, "unassigned"),
+    countByProjectAndStatus("dev_ai_bugs", projectId, "open"),
     countByProjectAndStatus("dev_ai_knowledge", projectId, "pending"),
   ]);
 
-  const [todos, bugs, knowledge, docs] = await Promise.all([
-    countFinalByProject("dev_ai_todos", projectId),
-    countFinalByProject("dev_ai_bugs", projectId),
-    countFinalByProject("dev_ai_knowledge", projectId),
-    countFinalByProject("dev_ai_docs", projectId),
+  // Total counts - all items in project (pending pieces accumulate for Clair)
+  const [todos, bugs, knowledge, docs, conventions] = await Promise.all([
+    countByProject("dev_ai_todos", projectId),
+    countByProject("dev_ai_bugs", projectId),
+    countByProject("dev_ai_knowledge", projectId),
+    countByProject("dev_ai_docs", projectId),
+    countByProject("dev_ai_conventions", projectId, "active"),
   ]);
 
   return {
@@ -58,7 +65,8 @@ async function getProjectSummary(projectId: string): Promise<ProjectSummary> {
     bugs,
     knowledge,
     docs,
-    total: todos + bugs + knowledge + docs,
+    conventions,
+    total: todos + bugs + knowledge + docs + conventions,
   };
 }
 
