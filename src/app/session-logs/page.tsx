@@ -71,11 +71,37 @@ interface Project {
   children?: Project[];
 }
 
+interface SusanProject {
+  id: string;
+  name: string;
+  todos: number;      // status = 'unassigned'
+  bugs: number;       // status = 'open'
+  knowledge: number;  // status = 'pending' (includes docs, snippets)
+  structure: number;  // conventions only (active)
+  total: number;
+}
+
+interface ClairProject {
+  id: string;
+  name: string;
+  todos: number;      // status = 'assigned'
+  bugs: number;       // status = 'open'
+  knowledge: number;  // status = 'published'
+  structure: number;  // conventions only
+  total: number;
+}
+
 export default function SessionLogsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [buckets, setBuckets] = useState<BucketCounts>({});
   const [jenBuckets, setJenBuckets] = useState<BucketCounts>({});
   const [projects, setProjects] = useState<Project[]>([]);
+  const [susanProjects, setSusanProjects] = useState<SusanProject[]>([]);
+  const [susanTotals, setSusanTotals] = useState({ todos: 0, bugs: 0, knowledge: 0, structure: 0, total: 0 });
+  const [clairProjects, setClairProjects] = useState<ClairProject[]>([]);
+  const [clairTotals, setClairTotals] = useState({ todos: 0, bugs: 0, knowledge: 0, structure: 0, total: 0 });
+  const [projectOrder, setProjectOrder] = useState<string[]>([]); // Custom order for projects
+  const [draggedProject, setDraggedProject] = useState<string | null>(null);
   const [stats, setStats] = useState<DatabaseStats | null>(null);
   const [teamStatuses, setTeamStatuses] = useState<Record<string, TeamStatus>>({});
   const [loading, setLoading] = useState(false);
@@ -89,11 +115,13 @@ export default function SessionLogsPage() {
     setError(null);
 
     try {
-      // Fetch sessions, pipeline buckets, Jen's extraction buckets, and projects
-      const [sessionsRes, bucketsRes, extractionsRes, projectsListRes, projectsSummaryRes] = await Promise.all([
-        fetch('/api/ai-sessions?limit=100', { cache: 'no-store' }),
-        fetch('/api/ai-sessions/buckets', { cache: 'no-store' }),
-        fetch('/api/ai-extractions', { cache: 'no-store' }),
+      // Fetch all data
+      const [sessionsRes, bucketsRes, extractionsRes, susanRes, clairRes, projectsListRes, projectsSummaryRes] = await Promise.all([
+        fetch('/session-logs/api/sessions?limit=100', { cache: 'no-store' }),
+        fetch('/session-logs/api/sessions/buckets', { cache: 'no-store' }),
+        fetch('/session-logs/api/extractions', { cache: 'no-store' }),
+        fetch('/session-logs/api/extractions/by-project', { cache: 'no-store' }),
+        fetch('/session-logs/api/extractions/clair', { cache: 'no-store' }),
         fetch('/project-management/api/projects', { cache: 'no-store' }),
         fetch('/project-management/api/projects/summary', { cache: 'no-store' }),
       ]);
@@ -105,28 +133,28 @@ export default function SessionLogsPage() {
       const sessionsData = await sessionsRes.json();
       const bucketsData = await bucketsRes.json();
       const extractionsData = extractionsRes.ok ? await extractionsRes.json() : { success: false };
+      const susanData = susanRes.ok ? await susanRes.json() : { success: false };
+      const clairData = clairRes.ok ? await clairRes.json() : { success: false };
       const projectsListData = projectsListRes.ok ? await projectsListRes.json() : { success: false };
       const projectsSummaryData = projectsSummaryRes.ok ? await projectsSummaryRes.json() : { success: false };
 
       if (sessionsData.success) {
         setSessions(sessionsData.sessions || []);
 
-        // Check External Claude (Local) health - should capture every 15 min
-        // Match by source_type OR source_name containing "External" or "Local"
-        const externalSessions = (sessionsData.sessions || []).filter(
-          (s: Session) =>
-            s.source_type === 'external' ||
-            (s.source_name && (s.source_name.includes('External') || s.source_name.includes('Local')))
+        // Check Transcript capture health - Chad should capture every 15 min
+        // Match by source_type === 'transcript' (from transcripts-9500 via Chad)
+        const transcriptSessions = (sessionsData.sessions || []).filter(
+          (s: Session) => s.source_type === 'transcript'
         );
-        if (externalSessions.length > 0) {
-          const mostRecent = externalSessions[0]; // Already sorted by started_at desc
+        if (transcriptSessions.length > 0) {
+          const mostRecent = transcriptSessions[0]; // Already sorted by started_at desc
           const lastCapture = new Date(mostRecent.started_at || 0);
           const now = new Date();
           const minutesSince = (now.getTime() - lastCapture.getTime()) / (1000 * 60);
           // Allow 18 min buffer (15 min interval + 3 min grace)
           setExternalClaudeHealth(minutesSince <= 18 ? 'healthy' : 'missed');
         } else {
-          setExternalClaudeHealth('missed'); // No external sessions = not capturing
+          setExternalClaudeHealth('missed'); // No transcript sessions = Chad not capturing
         }
       }
 
@@ -137,6 +165,16 @@ export default function SessionLogsPage() {
 
       if (extractionsData.success) {
         setJenBuckets(extractionsData.buckets || {});
+      }
+
+      if (susanData.success) {
+        setSusanProjects(susanData.projects || []);
+        setSusanTotals(susanData.totals || { todos: 0, bugs: 0, knowledge: 0, structure: 0, total: 0 });
+      }
+
+      if (clairData.success) {
+        setClairProjects(clairData.projects || []);
+        setClairTotals(clairData.totals || { todos: 0, bugs: 0, knowledge: 0, structure: 0, total: 0 });
       }
       // Build parent projects with aggregated children stats
       if (projectsListData.success && projectsListData.projects) {
@@ -201,7 +239,7 @@ export default function SessionLogsPage() {
       // Fetch each team's stats
       const teamPromises = TEAMS.map(async (team) => {
         try {
-          const res = await fetch(`/api/ai-sessions/buckets?workspace=${team.workspace}`, { cache: 'no-store' });
+          const res = await fetch(`/session-logs/api/sessions/buckets?workspace=${team.workspace}`, { cache: 'no-store' });
           if (res.ok) {
             const data = await res.json();
             const s = data.stats || {};
@@ -230,6 +268,67 @@ export default function SessionLogsPage() {
       setLoading(false);
     }
   }, []);
+
+  // Load saved project order from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('session-logs-project-order');
+    if (saved) {
+      try {
+        setProjectOrder(JSON.parse(saved));
+      } catch {}
+    }
+  }, []);
+
+  // Save project order to localStorage when it changes
+  useEffect(() => {
+    if (projectOrder.length > 0) {
+      localStorage.setItem('session-logs-project-order', JSON.stringify(projectOrder));
+    }
+  }, [projectOrder]);
+
+  // Drag handlers for project reordering
+  const handleDragStart = (projectId: string) => {
+    setDraggedProject(projectId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedProject || draggedProject === targetId) return;
+
+    // Get all project IDs (combine susan and clair, dedupe)
+    const allIds = [...new Set([...susanProjects.map(p => p.id), ...clairProjects.map(p => p.id)])];
+
+    // Use current order or default order
+    const currentOrder = projectOrder.length > 0 ? projectOrder : allIds;
+
+    const dragIdx = currentOrder.indexOf(draggedProject);
+    const targetIdx = currentOrder.indexOf(targetId);
+
+    if (dragIdx === -1 || targetIdx === -1) return;
+
+    // Reorder
+    const newOrder = [...currentOrder];
+    newOrder.splice(dragIdx, 1);
+    newOrder.splice(targetIdx, 0, draggedProject);
+    setProjectOrder(newOrder);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedProject(null);
+  };
+
+  // Sort projects by custom order
+  const sortByOrder = <T extends { id: string }>(items: T[]): T[] => {
+    if (projectOrder.length === 0) return items;
+    return [...items].sort((a, b) => {
+      const aIdx = projectOrder.indexOf(a.id);
+      const bIdx = projectOrder.indexOf(b.id);
+      if (aIdx === -1 && bIdx === -1) return 0;
+      if (aIdx === -1) return 1;
+      if (bIdx === -1) return -1;
+      return aIdx - bIdx;
+    });
+  };
 
   // Initial load
   useEffect(() => {
@@ -330,11 +429,9 @@ export default function SessionLogsPage() {
             <PipelineArrow />
             <TotalStat label="Processed" value={totals.processed} color="blue" />
             <PipelineArrow />
-            <TotalStat label="Flagged" value={totals.flagged} color="purple" />
+            <TotalStat label="Extracted" value={totals.flagged} color="purple" />
             <PipelineArrow />
             <TotalStat label="Pending" value={totals.pending} color="yellow" />
-            <PipelineArrow />
-            <TotalStat label="Published" value={totals.published} color="indigo" />
             <PipelineArrow />
             <TotalStat label="Cleaned" value={totals.cleaned} color="teal" />
             <PipelineArrow />
@@ -368,9 +465,9 @@ export default function SessionLogsPage() {
               <div className="flex items-center gap-2">
                 <div
                   className={`w-2.5 h-2.5 rounded-full ${externalClaudeHealth === 'healthy' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}
-                  title={externalClaudeHealth === 'healthy' ? 'External Claude: Capturing' : 'External Claude: MISSED 15-min window!'}
+                  title={externalClaudeHealth === 'healthy' ? 'Chad: Capturing every 15 min' : 'Chad: MISSED 15-min capture!'}
                 />
-                <span className="text-xs text-gray-500">Local</span>
+                <span className="text-xs text-gray-500">Chad</span>
               </div>
             </div>
           </div>
@@ -388,10 +485,10 @@ export default function SessionLogsPage() {
           </div>
         </div>
 
-        {/* Column 2: Jen's Flagged Buckets */}
+        {/* Column 2: Jen's 20 Extraction Buckets */}
         <div className="flex-1 flex flex-col border-r border-gray-700 min-w-0">
           <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 shrink-0">
-            <h2 className="text-sm font-medium text-gray-300">Jen's Flagged Items</h2>
+            <h2 className="text-sm font-medium text-gray-300">Jen's Extractions</h2>
           </div>
           <div className="flex-1 overflow-auto p-3">
             <div className="space-y-1">
@@ -402,21 +499,62 @@ export default function SessionLogsPage() {
           </div>
         </div>
 
-        {/* Column 3: Susan's Projects */}
+        {/* Column 3: Susan's Project Breakdown */}
+        <div className="flex-1 flex flex-col border-r border-gray-700 min-w-0">
+          <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 shrink-0">
+            <h2 className="text-sm font-medium text-gray-300">Susan's Filing ({susanTotals.total})</h2>
+            <div className="flex gap-3 mt-1 text-[10px]">
+              <span className="text-blue-400">Todos {susanTotals.todos}</span>
+              <span className="text-red-400">Bugs {susanTotals.bugs}</span>
+              <span className="text-green-400">Knowledge {susanTotals.knowledge}</span>
+              <span className="text-purple-400">Structure {susanTotals.structure}</span>
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto p-2">
+            <div className="space-y-1">
+              {susanProjects.length === 0 ? (
+                <div className="text-center py-4 text-gray-500 text-xs">No items filed</div>
+              ) : (
+                sortByOrder(susanProjects).map(project => (
+                  <SusanProjectRow
+                    key={project.id}
+                    project={project}
+                    isDragging={draggedProject === project.id}
+                    onDragStart={() => handleDragStart(project.id)}
+                    onDragOver={(e) => handleDragOver(e, project.id)}
+                    onDragEnd={handleDragEnd}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Column 4: Clair's Published */}
         <div className="flex-1 flex flex-col min-w-0">
           <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 shrink-0">
-            <h2 className="text-sm font-medium text-gray-300">Susan's Projects ({projects.length})</h2>
+            <h2 className="text-sm font-medium text-gray-300">Clair's Published ({clairTotals.total})</h2>
+            <div className="flex gap-3 mt-1 text-[10px]">
+              <span className="text-blue-400">Todos {clairTotals.todos}</span>
+              <span className="text-red-400">Bugs {clairTotals.bugs}</span>
+              <span className="text-green-400">Knowledge {clairTotals.knowledge}</span>
+              <span className="text-purple-400">Structure {clairTotals.structure}</span>
+            </div>
           </div>
-          <div className="flex-1 overflow-auto p-3">
-            <div className="space-y-2">
-              {projects.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <div className="text-3xl mb-2">📁</div>
-                  <p>No projects</p>
-                </div>
+          <div className="flex-1 overflow-auto p-2">
+            <div className="space-y-1">
+              {clairProjects.length === 0 ? (
+                <div className="text-center py-4 text-gray-500 text-xs">No items published</div>
               ) : (
-                projects.map(project => (
-                  <ProjectCard key={project.id} project={project} />
+                sortByOrder(clairProjects).map(project => (
+                  <ClairProjectRow
+                    key={project.id}
+                    project={project}
+                    isDragging={draggedProject === project.id}
+                    onDragStart={() => handleDragStart(project.id)}
+                    onDragOver={(e) => handleDragOver(e, project.id)}
+                    onDragEnd={handleDragEnd}
+                  />
                 ))
               )}
             </div>
@@ -512,6 +650,80 @@ function SessionItem({ session }: { session: Session }) {
         <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColors[session.status || 'captured'] || statusColors.captured}`}>
           {session.status || 'captured'}
         </span>
+      </div>
+    </div>
+  );
+}
+
+// Susan's project row - shows Todos/Bugs/Knowledge/Structure under name (draggable)
+function SusanProjectRow({
+  project,
+  isDragging,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+}: {
+  project: SusanProject;
+  isDragging: boolean;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
+      className={`py-1.5 px-2 rounded bg-gray-800/30 text-xs cursor-grab active:cursor-grabbing ${
+        isDragging ? 'opacity-50 border border-blue-500' : ''
+      }`}
+    >
+      <div className={`font-medium truncate ${project.total > 0 ? 'text-white' : 'text-gray-500'}`}>
+        {project.name}
+      </div>
+      <div className="flex gap-2 mt-0.5 text-[10px]">
+        <span className={project.todos > 0 ? 'text-blue-400' : 'text-gray-600'}>Todos {project.todos}</span>
+        <span className={project.bugs > 0 ? 'text-red-400' : 'text-gray-600'}>Bugs {project.bugs}</span>
+        <span className={project.knowledge > 0 ? 'text-green-400' : 'text-gray-600'}>Knowledge {project.knowledge}</span>
+        <span className={project.structure > 0 ? 'text-purple-400' : 'text-gray-600'}>Structure {project.structure}</span>
+      </div>
+    </div>
+  );
+}
+
+// Clair's project row - shows Todos/Bugs/Knowledge/Structure under name (draggable)
+function ClairProjectRow({
+  project,
+  isDragging,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+}: {
+  project: ClairProject;
+  isDragging: boolean;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
+      className={`py-1.5 px-2 rounded bg-gray-800/30 text-xs cursor-grab active:cursor-grabbing ${
+        isDragging ? 'opacity-50 border border-blue-500' : ''
+      }`}
+    >
+      <div className={`font-medium truncate ${project.total > 0 ? 'text-white' : 'text-gray-500'}`}>
+        {project.name}
+      </div>
+      <div className="flex gap-2 mt-0.5 text-[10px]">
+        <span className={project.todos > 0 ? 'text-blue-400' : 'text-gray-600'}>Todos {project.todos}</span>
+        <span className={project.bugs > 0 ? 'text-red-400' : 'text-gray-600'}>Bugs {project.bugs}</span>
+        <span className={project.knowledge > 0 ? 'text-green-400' : 'text-gray-600'}>Knowledge {project.knowledge}</span>
+        <span className={project.structure > 0 ? 'text-purple-400' : 'text-gray-600'}>Structure {project.structure}</span>
       </div>
     </div>
   );
