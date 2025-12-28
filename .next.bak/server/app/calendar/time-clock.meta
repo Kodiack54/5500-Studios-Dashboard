@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/calendar/layout,_N_T_/calendar/time-clock/layout,_N_T_/calendar/time-clock/page,_N_T_/calendar/time-clock"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/calendar/time-clock/__PAGE__",
+    "/calendar/time-clock",
+    "/calendar",
+    "/_index",
+    "/_head"
+  ]
+}

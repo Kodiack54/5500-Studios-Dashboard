@@ -86,10 +86,10 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
     author: '',
   });
 
-  // Fetch knowledge using projectId (UUID)
+  // Fetch knowledge directly using projectPath (like TodosTab)
   useEffect(() => {
-    fetchKnowledge();
-  }, [projectId]);
+    fetchKnowledge(projectPath);
+  }, [projectPath]);
 
   // Also fetch project paths for folder selector
   useEffect(() => {
@@ -158,10 +158,11 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
     } catch (error) { console.error('Error moving folder:', error); fetchProjectPaths(); }
   };
 
-  const fetchKnowledge = async () => {
-    if (!projectId) return;
+  const fetchKnowledge = async (path: string) => {
+    if (!path) return;
     setIsLoading(true);
     try {
+      const projectId = path.startsWith('/') ? path.slice(1) : path;
       const response = await fetch(`/project-management/api/clair/knowledge/${projectId}`);
       const data = await response.json();
       if (data.success) {
@@ -176,8 +177,9 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
   };
 
   const handleSubmit = async () => {
-    if (!formData.title || !formData.content || !projectId) return;
+    if (!formData.title || !formData.content || !selectedPath) return;
     try {
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       const url = editingEntry
         ? `/project-management/api/clair/knowledge/${projectId}/${editingEntry.id}`
         : `/project-management/api/clair/knowledge/${projectId}`;
@@ -189,7 +191,7 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
         body: JSON.stringify(formData),
       });
       resetForm();
-      fetchKnowledge();
+      fetchKnowledge(selectedPath.path);
     } catch (error) {
       console.error('Error saving entry:', error);
     }
@@ -198,8 +200,9 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
   const handleDelete = async (entry: KnowledgeEntry) => {
     if (!confirm('Delete this entry?')) return;
     try {
+      const projectId = projectPath.startsWith('/') ? projectPath.slice(1) : projectPath;
       await fetch(`/project-management/api/clair/knowledge/${projectId}/${entry.id}`, { method: 'DELETE' });
-      fetchKnowledge();
+      fetchKnowledge(projectPath);
     } catch (error) {
       console.error('Error deleting entry:', error);
     }

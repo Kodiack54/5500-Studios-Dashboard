@@ -1,0 +1,3 @@
+module.exports=[93282,a=>{"use strict";var b=a.i(87924),c=a.i(72131),d=a.i(91599);function e({children:a}){let e=(0,c.useContext)(d.PageTitleContext);return(0,c.useEffect)(()=>{e({title:"Credentials & Sources",description:"Manage API keys, logins, and portal configurations across all sources"})},[e]),(0,b.jsx)("div",{className:"flex flex-col h-full overflow-hidden",children:a})}a.s(["default",()=>e])}];
+
+//# sourceMappingURL=src_app_credentials_layout_tsx_e06aa46d._.js.map

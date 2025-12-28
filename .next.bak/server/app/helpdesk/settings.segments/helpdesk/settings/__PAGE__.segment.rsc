@@ -1,0 +1,7 @@
+1:"$Sreact.fragment"
+2:I[79443,["/_next/static/chunks/6484ee9d621453fc.js","/_next/static/chunks/9773a7793a46f7e4.js","/_next/static/chunks/4a11ee9ac6ffa3e0.js","/_next/static/chunks/062dd8b65eb71a4f.js"],""]
+3:I[23314,["/_next/static/chunks/6484ee9d621453fc.js","/_next/static/chunks/9773a7793a46f7e4.js","/_next/static/chunks/4a11ee9ac6ffa3e0.js","/_next/static/chunks/062dd8b65eb71a4f.js"],"default"]
+4:I[19497,["/_next/static/chunks/040e19e3aa564344.js","/_next/static/chunks/67af53dbdd5d8532.js"],"OutletBoundary"]
+5:"$Sreact.suspense"
+0:{"buildId":"UO8Ev5EpCTIgzDyIBtjnc","rsc":["$","$1","c",{"children":[["$","div",null,{"children":[["$","div",null,{"className":"flex justify-between items-center mb-6 pb-4 border-b border-gray-700","children":["$","div",null,{"children":[["$","div",null,{"className":"flex items-center gap-2 text-sm text-gray-400 mb-1","children":[["$","$L2",null,{"href":"/helpdesk","className":"hover:text-white transition-colors","children":"Helpdesk"}],["$","span",null,{"children":"/"}],["$","span",null,{"className":"text-white","children":"Settings"}]]}],["$","h2",null,{"className":"text-2xl font-semibold text-white","children":"Helpdesk Settings"}],["$","p",null,{"className":"text-gray-400 text-sm","children":"Configure helpdesk behavior and notifications"}]]}]}],["$","$L3",null,{}]]}],[["$","script","script-0",{"src":"/_next/static/chunks/062dd8b65eb71a4f.js","async":true}]],["$","$L4",null,{"children":["$","$5",null,{"name":"Next.MetadataOutlet","children":"$@6"}]}]]}],"loading":null,"isPartial":false}
+6:null

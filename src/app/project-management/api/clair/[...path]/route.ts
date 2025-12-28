@@ -17,7 +17,7 @@ const ENDPOINT_TO_TABLE: Record<string, string> = {
 };
 
 // Pipeline statuses that should NOT be shown in dashboard
-const PIPELINE_STATUSES = ['flagged', 'pending'];
+const PIPELINE_STATUSES = ['flagged'];  // pending shows in UI
 
 function groupByType(data: Array<Record<string, unknown>>, endpoint: string): Record<string, Array<Record<string, unknown>>> {
   const grouped: Record<string, Array<Record<string, unknown>>> = {};

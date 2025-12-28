@@ -1,0 +1,13 @@
+var R=require("../../chunks/ssr/[turbopack]_runtime.js")("server/app/_not-found/page.js")
+R.c("server/chunks/ssr/[root-of-the-server]__969e3393._.js")
+R.c("server/chunks/ssr/7c33f_next_dist_808c96d2._.js")
+R.c("server/chunks/ssr/7c33f_next_dist_esm_build_templates_app-page_bb69d94a.js")
+R.c("server/chunks/ssr/[root-of-the-server]__91653e23._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__6055a7a4._.js")
+R.c("server/chunks/ssr/7c33f_next_dist_b71a5a34._.js")
+R.c("server/chunks/ssr/Studio_kodiack-dashboard-5500_src_app_layout_tsx_3024de76._.js")
+R.c("server/chunks/ssr/7c33f_next_dist_client_components_fba8f4ce._.js")
+R.c("server/chunks/ssr/7c33f_next_dist_client_components_builtin_forbidden_dae5c044.js")
+R.c("server/chunks/ssr/c5e6d_odiack-dashboard-5500__next-internal_server_app__not-found_page_actions_d803c8a8.js")
+R.m(60936)
+module.exports=R.m(60936).exports

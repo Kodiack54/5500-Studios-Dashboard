@@ -1,0 +1,3 @@
+{
+  "/api/nextbidder/worker/health/route": "app/api/nextbidder/worker/health/route.js"
+}

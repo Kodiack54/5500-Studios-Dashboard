@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/dev-controls/layout,_N_T_/dev-controls/security/layout,_N_T_/dev-controls/security/page,_N_T_/dev-controls/security"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/dev-controls/security/__PAGE__",
+    "/dev-controls/security",
+    "/dev-controls",
+    "/_index",
+    "/_head"
+  ]
+}

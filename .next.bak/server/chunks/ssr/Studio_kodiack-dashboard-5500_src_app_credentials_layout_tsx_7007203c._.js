@@ -1,0 +1,3 @@
+module.exports=[24735,a=>{"use strict";var b=a.i(18030),c=a.i(30072),d=a.i(38270);function e({children:a}){let e=(0,c.useContext)(d.PageTitleContext);return(0,c.useEffect)(()=>{e({title:"Credentials & Sources",description:"Manage API keys, logins, and portal configurations across all sources"})},[e]),(0,b.jsx)("div",{className:"flex flex-col h-full overflow-hidden",children:a})}a.s(["default",()=>e])}];
+
+//# sourceMappingURL=Studio_kodiack-dashboard-5500_src_app_credentials_layout_tsx_7007203c._.js.map

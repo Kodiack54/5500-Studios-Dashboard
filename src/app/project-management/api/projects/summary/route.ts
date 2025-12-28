@@ -3,23 +3,14 @@ import { db } from "@/lib/db";
 
 interface ProjectSummary {
   project_id: string;
-  // Working items (waiting for action)
-  pending_todos: number;      // unassigned
-  pending_bugs: number;       // open
-  pending_knowledge: number;  // pending (accumulating for Clair)
+  pending_todos: number;
+  pending_bugs: number;
+  pending_knowledge: number;
   pending_total: number;
-  // Completed items (Clair processed)
-  done_todos: number;         // completed/closed
-  done_bugs: number;          // fixed
-  done_knowledge: number;     // published
-  done_docs: number;          // published
-  done_total: number;
-  // Totals per category
   todos: number;
   bugs: number;
   knowledge: number;
   docs: number;
-  conventions: number;
   total: number;
 }
 
@@ -33,13 +24,10 @@ async function countByProjectAndStatus(table: string, projectId: string, status:
   }
 }
 
-async function countByProject(table: string, projectId: string, status?: string): Promise<number> {
+async function countFinalByProject(table: string, projectId: string): Promise<number> {
   try {
-    const sql = status
-      ? `SELECT COUNT(*) as count FROM ${table} WHERE project_id = $1 AND status = $2`
-      : `SELECT COUNT(*) as count FROM ${table} WHERE project_id = $1`;
-    const params = status ? [projectId, status] : [projectId];
-    const result = await db.query<{ count: string }>(sql, params);
+    const sql = `SELECT COUNT(*) as count FROM ${table} WHERE project_id = $1 AND status NOT IN ('flagged', 'pending')`;
+    const result = await db.query<{ count: string }>(sql, [projectId]);
     return parseInt((result.data as { count: string }[])?.[0]?.count || "0", 10);
   } catch {
     return 0;
@@ -47,30 +35,17 @@ async function countByProject(table: string, projectId: string, status?: string)
 }
 
 async function getProjectSummary(projectId: string): Promise<ProjectSummary> {
-  // Pending counts - items waiting for action
   const [pendingTodos, pendingBugs, pendingKnowledge] = await Promise.all([
-    countByProjectAndStatus("dev_ai_todos", projectId, "unassigned"),
-    countByProjectAndStatus("dev_ai_bugs", projectId, "open"),
+    countByProjectAndStatus("dev_ai_todos", projectId, "pending"),
+    countByProjectAndStatus("dev_ai_bugs", projectId, "pending"),
     countByProjectAndStatus("dev_ai_knowledge", projectId, "pending"),
   ]);
 
-  // Done counts - Clair processed items
-  const [doneTodosCompleted, doneTodosClosed, doneBugs, doneKnowledge, doneDocs] = await Promise.all([
-    countByProjectAndStatus("dev_ai_todos", projectId, "completed"),
-    countByProjectAndStatus("dev_ai_todos", projectId, "closed"),
-    countByProjectAndStatus("dev_ai_bugs", projectId, "fixed"),
-    countByProjectAndStatus("dev_ai_knowledge", projectId, "published"),
-    countByProjectAndStatus("dev_ai_docs", projectId, "published"),
-  ]);
-  const doneTodos = doneTodosCompleted + doneTodosClosed;
-
-  // Total counts - all items in project
-  const [todos, bugs, knowledge, docs, conventions] = await Promise.all([
-    countByProject("dev_ai_todos", projectId),
-    countByProject("dev_ai_bugs", projectId),
-    countByProject("dev_ai_knowledge", projectId),
-    countByProject("dev_ai_docs", projectId),
-    countByProject("dev_ai_conventions", projectId, "active"),
+  const [todos, bugs, knowledge, docs] = await Promise.all([
+    countFinalByProject("dev_ai_todos", projectId),
+    countFinalByProject("dev_ai_bugs", projectId),
+    countFinalByProject("dev_ai_knowledge", projectId),
+    countFinalByProject("dev_ai_docs", projectId),
   ]);
 
   return {
@@ -79,17 +54,11 @@ async function getProjectSummary(projectId: string): Promise<ProjectSummary> {
     pending_bugs: pendingBugs,
     pending_knowledge: pendingKnowledge,
     pending_total: pendingTodos + pendingBugs + pendingKnowledge,
-    done_todos: doneTodos,
-    done_bugs: doneBugs,
-    done_knowledge: doneKnowledge,
-    done_docs: doneDocs,
-    done_total: doneTodos + doneBugs + doneKnowledge + doneDocs,
     todos,
     bugs,
     knowledge,
     docs,
-    conventions,
-    total: todos + bugs + knowledge + docs + conventions,
+    total: todos + bugs + knowledge + docs,
   };
 }
 

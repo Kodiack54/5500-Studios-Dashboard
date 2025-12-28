@@ -7,7 +7,7 @@ import { ChevronDown, ChevronRight, DoorOpen, Users, ArrowLeft, Building2 } from
 import TimeClockDropdown from './TimeClockDropdown';
 import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
-import AITeamChat from './AITeamChat';
+import AITeamChat from '@/app/ai-team/components/AITeamChat';
 import { ProductionStatusContext } from '@/app/layout';
 import { useClient } from '@/app/contexts/ClientContext';
 import { supabase } from '../lib/supabase';

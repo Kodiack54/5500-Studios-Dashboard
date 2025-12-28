@@ -1,0 +1,10 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/engine/health/route.js")
+R.c("server/chunks/7c33f_next_0b311c72._.js")
+R.c("server/chunks/7c33f_@supabase_realtime-js_dist_module_eb88a04d._.js")
+R.c("server/chunks/7c33f_@supabase_storage-js_dist_module_5fbea525._.js")
+R.c("server/chunks/7c33f_@supabase_auth-js_dist_module_23bd07e8._.js")
+R.c("server/chunks/7c33f_2516502b._.js")
+R.c("server/chunks/[root-of-the-server]__1e4c4f40._.js")
+R.c("server/chunks/d1936__next-internal_server_app_api_engine_health_route_actions_7de44724.js")
+R.m("[project]/Studio/kodiack-dashboard-5500/node_modules/next/dist/esm/build/templates/app-route.js { INNER_APP_ROUTE => \"[project]/Studio/kodiack-dashboard-5500/src/app/api/engine/health/route.ts [app-route] (ecmascript)\" } [app-route] (ecmascript)")
+module.exports=R.m("[project]/Studio/kodiack-dashboard-5500/node_modules/next/dist/esm/build/templates/app-route.js { INNER_APP_ROUTE => \"[project]/Studio/kodiack-dashboard-5500/src/app/api/engine/health/route.ts [app-route] (ecmascript)\" } [app-route] (ecmascript)").exports

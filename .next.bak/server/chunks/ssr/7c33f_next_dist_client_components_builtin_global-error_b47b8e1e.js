@@ -1,0 +1,3 @@
+module.exports=[30960,(a,b,c)=>{let{createClientModuleProxy:d}=a.r(3530);a.n(d("[project]/Studio/kodiack-dashboard-5500/node_modules/next/dist/client/components/builtin/global-error.js <module evaluation>"))},86832,(a,b,c)=>{let{createClientModuleProxy:d}=a.r(3530);a.n(d("[project]/Studio/kodiack-dashboard-5500/node_modules/next/dist/client/components/builtin/global-error.js"))},55511,a=>{"use strict";a.i(30960);var b=a.i(86832);a.n(b)}];
+
+//# sourceMappingURL=7c33f_next_dist_client_components_builtin_global-error_b47b8e1e.js.map

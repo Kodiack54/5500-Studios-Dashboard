@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/helpdesk/layout,_N_T_/helpdesk/settings/layout,_N_T_/helpdesk/settings/page,_N_T_/helpdesk/settings"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/helpdesk/settings/__PAGE__",
+    "/helpdesk/settings",
+    "/helpdesk",
+    "/_index",
+    "/_head"
+  ]
+}

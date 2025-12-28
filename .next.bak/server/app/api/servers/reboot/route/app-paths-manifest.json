@@ -1,0 +1,3 @@
+{
+  "/api/servers/reboot/route": "app/api/servers/reboot/route.js"
+}

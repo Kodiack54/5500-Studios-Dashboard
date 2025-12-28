@@ -26,7 +26,11 @@ interface WorkerStatus {
   responseTime?: number;
 }
 
-// Check individual worker health by hitting their /health endpoint
+// Simple in-memory cache for status (prevents flicker on transient failures)
+const statusCache: Record<string, { status: WorkerStatus; timestamp: number }> = {};
+const CACHE_TTL = 30000; // 30 seconds - keep last known status for this long
+
+// Check individual worker health with retry logic
 async function checkWorkerHealth(worker: typeof AI_WORKERS[0]): Promise<WorkerStatus> {
   // Dashboard is always online - we're serving this request from it!
   if (worker.id === 'dashboard') {
@@ -38,40 +42,69 @@ async function checkWorkerHealth(worker: typeof AI_WORKERS[0]): Promise<WorkerSt
   }
 
   const startTime = Date.now();
+  const maxRetries = 2;
 
-  try {
-    const response = await fetch(`${AI_DROPLET}:${worker.port}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000),
-    });
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${AI_DROPLET}:${worker.port}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(4000),  // 4s per attempt
+        cache: 'no-store',
+      });
 
-    const responseTime = Date.now() - startTime;
+      const responseTime = Date.now() - startTime;
 
-    if (response.ok) {
-      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const result: WorkerStatus = {
+          id: worker.id,
+          status: 'online',
+          responseTime,
+          uptime: data.uptime,
+          cpu: data.cpu,
+          memory: data.memory,
+          lastHeartbeat: new Date().toISOString(),
+        };
+        // Cache successful result
+        statusCache[worker.id] = { status: result, timestamp: Date.now() };
+        return result;
+      } else {
+        // Non-200 response - don't retry, it's an error
+        const result: WorkerStatus = {
+          id: worker.id,
+          status: 'error',
+          responseTime,
+        };
+        statusCache[worker.id] = { status: result, timestamp: Date.now() };
+        return result;
+      }
+    } catch (error) {
+      // If this isn't the last attempt, retry
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 500)); // Wait 500ms before retry
+        continue;
+      }
+
+      // All retries failed - check cache for recent known-good status
+      const cached = statusCache[worker.id];
+      if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+        // Return cached status but mark it as potentially stale
+        return {
+          ...cached.status,
+          lastHeartbeat: cached.status.lastHeartbeat, // Keep original heartbeat time
+        };
+      }
+
+      // No cache or expired - worker is truly offline
       return {
         id: worker.id,
-        status: 'online',
-        responseTime,
-        uptime: data.uptime,
-        cpu: data.cpu,
-        memory: data.memory,
-        lastHeartbeat: new Date().toISOString(),
-      };
-    } else {
-      return {
-        id: worker.id,
-        status: 'error',
-        responseTime,
+        status: 'offline',
       };
     }
-  } catch (error) {
-    // Worker not responding
-    return {
-      id: worker.id,
-      status: 'offline',
-    };
   }
+
+  // Fallback (shouldn't reach here)
+  return { id: worker.id, status: 'offline' };
 }
 
 export async function GET(request: NextRequest) {

@@ -1,0 +1,8 @@
+{
+  "/ai-team/api/status/route": "app/ai-team/api/status/route.js",
+  "/api/engine/health/route": "app/api/engine/health/route.js",
+  "/api/servers/health/route": "app/api/servers/health/route.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/page": "app/page.js",
+  "/project-management/api/clients/route": "app/project-management/api/clients/route.js"
+}

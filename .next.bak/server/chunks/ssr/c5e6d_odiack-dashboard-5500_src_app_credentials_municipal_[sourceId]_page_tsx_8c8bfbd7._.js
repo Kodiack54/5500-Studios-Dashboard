@@ -1,0 +1,3 @@
+module.exports=[64760,a=>{"use strict";var b=a.i(18030),c=a.i(30072),d=a.i(23072);function e({params:a}){let{sourceId:e}=(0,c.use)(a);return(0,b.jsx)(d.default,{sourceId:e,category:"municipal",backPath:"/credentials/municipal",showPscCodes:!1,showCategories:!1})}a.s(["default",()=>e])}];
+
+//# sourceMappingURL=c5e6d_odiack-dashboard-5500_src_app_credentials_municipal_%5BsourceId%5D_page_tsx_8c8bfbd7._.js.map

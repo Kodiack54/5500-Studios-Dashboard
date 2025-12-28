@@ -80,10 +80,10 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   }, [projectId]);
 
   useEffect(() => {
-    if (projectId) {
-      fetchBugs();
+    if (selectedPath) {
+      fetchBugs(selectedPath.path);
     }
-  }, [projectId]);
+  }, [selectedPath]);
 
   const fetchProjectPaths = async () => {
     try {
@@ -147,10 +147,10 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
     } catch (error) { console.error('Error moving folder:', error); fetchProjectPaths(); }
   };
 
-  const fetchBugs = async () => {
-    if (!projectId) return;
+  const fetchBugs = async (path: string) => {
     setIsLoading(true);
     try {
+      const projectId = path.startsWith('/') ? path.slice(1) : path;
       const response = await fetch(`/project-management/api/clair/bugs/${projectId}`);
       const data = await response.json();
       if (data.success) {
@@ -164,8 +164,9 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   };
 
   const handleSubmit = async () => {
-    if (!formData.title || !projectId) return;
+    if (!formData.title || !selectedPath) return;
     try {
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       const url = editingBug
         ? `/project-management/api/clair/bugs/${projectId}/${editingBug.id}`
         : `/project-management/api/clair/bugs/${projectId}`;
@@ -181,15 +182,16 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
         }),
       });
       resetForm();
-      fetchBugs();
+      fetchBugs(selectedPath.path);
     } catch (error) {
       console.error('Error saving bug:', error);
     }
   };
 
   const handleStatusChange = async (bug: BugReport, newStatus: BugReport['status']) => {
-    if (!projectId) return;
+    if (!selectedPath) return;
     try {
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       await fetch(`/project-management/api/clair/bugs/${projectId}/${bug.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -198,27 +200,29 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
           resolved_at: newStatus === 'fixed' ? new Date().toISOString() : null,
         }),
       });
-      fetchBugs();
+      fetchBugs(selectedPath.path);
     } catch (error) {
       console.error('Error updating bug:', error);
     }
   };
 
   const handleDelete = async (bug: BugReport) => {
-    if (!confirm('Delete this bug report?') || !projectId) return;
+    if (!confirm('Delete this bug report?') || !selectedPath) return;
     try {
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       await fetch(`/project-management/api/clair/bugs/${projectId}/${bug.id}`, { method: 'DELETE' });
-      fetchBugs();
+      fetchBugs(selectedPath.path);
     } catch (error) {
       console.error('Error deleting bug:', error);
     }
   };
 
   const handleArchive = async (bug: BugReport) => {
-    if (!projectId) return;
+    if (!selectedPath) return;
     try {
+      const projectId = selectedPath.path.startsWith('/') ? selectedPath.path.slice(1) : selectedPath.path;
       await fetch(`/project-management/api/clair/bugs/${projectId}/${bug.id}/archive`, { method: 'POST' });
-      fetchBugs();
+      fetchBugs(selectedPath.path);
     } catch (error) {
       console.error('Error archiving bug:', error);
     }

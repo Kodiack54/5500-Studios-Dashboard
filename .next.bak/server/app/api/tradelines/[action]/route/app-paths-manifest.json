@@ -1,0 +1,3 @@
+{
+  "/api/tradelines/[action]/route": "app/api/tradelines/[action]/route.js"
+}

@@ -67,7 +67,7 @@ export default function AITeamPage() {
       const [statusRes, usageRes, statsRes] = await Promise.all([
         fetch('/ai-team/api/status', { cache: 'no-store' }).catch(() => null),
         fetch('/ai-team/api/usage', { cache: 'no-store' }).catch(() => null),
-        fetch('/api/ai-sessions/buckets', { cache: 'no-store' }).catch(() => null),
+        fetch('/ai-team/api/sessions/buckets', { cache: 'no-store' }).catch(() => null),
       ]);
 
       // Process worker statuses
@@ -184,7 +184,7 @@ export default function AITeamPage() {
           {/* Budget Alert */}
           <div className={`flex items-center gap-2 px-2 py-1 rounded ${budgetAlert ? 'bg-red-900/50 text-red-400' : 'bg-gray-700 text-gray-300'}`}>
             <DollarSign className="w-4 h-4" />
-            <span className="text-sm font-mono">${totalCostToday.toFixed(2)} / ${dailyBudget.toFixed(2)}</span>
+            <span className="text-sm font-mono">${totalCostToday < 0.01 ? totalCostToday.toFixed(4) : totalCostToday.toFixed(2)} / ${dailyBudget.toFixed(2)}</span>
             {budgetAlert && <Bell className="w-4 h-4 animate-pulse" />}
           </div>
           {lastRefresh && (
@@ -214,7 +214,7 @@ export default function AITeamPage() {
           <StatCard icon={Zap} label="Extracted" value={pipelineStats?.extractions_today || 0} color="purple" />
           <StatCard icon={CheckCircle} label="Published" value={pipelineStats?.docs_published || 0} color="green" />
           <StatCard icon={Clock} label="Pending" value={pipelineStats?.pending || 0} color="yellow" />
-          <StatCard icon={DollarSign} label="AI Cost Today" value={`$${totalCostToday.toFixed(2)}`} color="orange" isString />
+          <StatCard icon={DollarSign} label="AI Cost Today" value={`$${totalCostToday < 0.01 ? totalCostToday.toFixed(4) : totalCostToday.toFixed(2)}`} color="orange" isString />
           <div className="p-2 rounded-lg bg-gray-800/50 border border-gray-700">
             <div className="flex items-center gap-2 mb-1">
               <DollarSign className={`w-4 h-4 ${budgetAlert ? 'text-red-400' : 'text-blue-400'}`} />

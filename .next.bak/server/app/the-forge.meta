@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/the-forge/layout,_N_T_/the-forge/page,_N_T_/the-forge"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/the-forge/__PAGE__",
+    "/the-forge",
+    "/_index",
+    "/_head"
+  ]
+}

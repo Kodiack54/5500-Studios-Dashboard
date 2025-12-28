@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/project-management/layout,_N_T_/project-management/page,_N_T_/project-management"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/project-management/__PAGE__",
+    "/project-management",
+    "/_index",
+    "/_head"
+  ]
+}

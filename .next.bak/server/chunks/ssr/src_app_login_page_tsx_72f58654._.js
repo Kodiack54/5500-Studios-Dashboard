@@ -1,0 +1,3 @@
+module.exports=[93482,a=>{"use strict";var b=a.i(87924),c=a.i(72131),d=a.i(29139);function e(){return(0,c.useEffect)(()=>{window.location.href=`${d.AUTH_URL}/login?redirect=${d.DASHBOARD_PORT}`},[]),(0,b.jsx)("div",{className:"min-h-screen bg-gray-900 flex items-center justify-center",children:(0,b.jsxs)("div",{className:"text-center",children:[(0,b.jsx)("div",{className:"animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"}),(0,b.jsx)("p",{className:"text-gray-400",children:"Redirecting to login..."})]})})}a.s(["default",()=>e])}];
+
+//# sourceMappingURL=src_app_login_page_tsx_72f58654._.js.map

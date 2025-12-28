@@ -108,8 +108,8 @@ export function usePipelineStatus(options: UsePipelineStatusOptions = {}) {
 
       // Fetch buckets (status counts) and sessions in parallel
       const [bucketsRes, sessionsRes] = await Promise.all([
-        fetch(`/api/ai-sessions/buckets${workspaceParam}`, { cache: 'no-store' }),
-        fetch(`/api/ai-sessions${sessionsParam}`, { cache: 'no-store' }),
+        fetch(`/ai-team/api/sessions/buckets${workspaceParam}`, { cache: 'no-store' }),
+        fetch(`/ai-team/api/sessions${sessionsParam}`, { cache: 'no-store' }),
       ]);
 
       if (!bucketsRes.ok || !sessionsRes.ok) {

@@ -1,0 +1,3 @@
+{
+  "/api/portals/worker/health/route": "app/api/portals/worker/health/route.js"
+}

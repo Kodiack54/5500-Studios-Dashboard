@@ -1,0 +1,3 @@
+{
+  "/helpdesk/system-tickets/[ticketId]/page": "app/helpdesk/system-tickets/[ticketId]/page.js"
+}
