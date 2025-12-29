@@ -3,7 +3,8 @@
 import { ChevronRight, ChevronDown, Settings, GripVertical } from 'lucide-react';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Project } from '../types';
+import { Project, ProjectStats } from '../types';
+import StatsRow from './StatsRow';
 
 // Environment color config
 const ENV_COLORS = {
@@ -12,14 +13,31 @@ const ENV_COLORS = {
   prod: { bg: 'bg-green-600/20', text: 'text-green-400', border: 'border-green-500', label: 'Prod' },
 };
 
-// Detect environment from project name/slug
-function detectEnvironment(project: Project): 'dev' | 'test' | 'prod' | null {
+/**
+ * Detect environment from parent port configuration or project name
+ */
+function detectEnvironment(project: Project, parent?: Project): 'dev' | 'test' | 'prod' | null {
+  // If this is a child with a parent, check if child's port matches parent's port slots
+  if (parent) {
+    const childPort = project.port_dev || project.port_test || project.port_prod;
+    if (childPort) {
+      if (parent.port_dev && childPort === parent.port_dev) return 'dev';
+      if (parent.port_test && childPort === parent.port_test) return 'test';
+      if (parent.port_prod && childPort === parent.port_prod) return 'prod';
+    }
+  }
+
+  // Fallback: detect from project name/slug
   const name = (project.name + ' ' + project.slug).toLowerCase();
   if (name.includes('prod') || name.includes('production') || name.includes('live')) return 'prod';
   if (name.includes('test') || name.includes('staging') || name.includes('qa')) return 'test';
   if (name.includes('dev') || name.includes('development') || name.includes('local')) return 'dev';
   return null;
 }
+
+// =============================================================================
+// SortableParentRow
+// =============================================================================
 
 interface SortableParentRowProps {
   project: Project;
@@ -28,9 +46,12 @@ interface SortableParentRowProps {
   overId: string | null;
   activeId: string | null;
   allProjects: Project[];
+  stats: ProjectStats;
   onToggle: () => void;
-  onSelect: (project: Project) => void;
+  onPreview: (project: Project) => void;
+  onOpen: (project: Project) => void;
   onEdit: (project: Project) => void;
+  getChildStats: (projectId: string) => ProjectStats;
 }
 
 export function SortableParentRow({
@@ -40,9 +61,12 @@ export function SortableParentRow({
   overId,
   activeId,
   allProjects,
+  stats,
   onToggle,
-  onSelect,
+  onPreview,
+  onOpen,
   onEdit,
+  getChildStats,
 }: SortableParentRowProps) {
   const {
     attributes,
@@ -61,12 +85,12 @@ export function SortableParentRow({
 
   const hasChildren = children.length > 0;
 
-  // Aggregate child info
-  const devChildren = children.filter(c => detectEnvironment(c) === 'dev');
-  const testChildren = children.filter(c => detectEnvironment(c) === 'test');
-  const prodChildren = children.filter(c => detectEnvironment(c) === 'prod');
+  // Aggregate child info - use parent port slots to determine environment
+  const devChildren = children.filter(c => detectEnvironment(c, project) === 'dev');
+  const testChildren = children.filter(c => detectEnvironment(c, project) === 'test');
+  const prodChildren = children.filter(c => detectEnvironment(c, project) === 'prod');
 
-  // Get all ports from children
+  // Get first port from each environment
   const childDevPorts = children.filter(c => c.port_dev).map(c => c.port_dev);
   const childTestPorts = children.filter(c => c.port_test).map(c => c.port_test);
   const childProdPorts = children.filter(c => c.port_prod).map(c => c.port_prod);
@@ -93,7 +117,7 @@ export function SortableParentRow({
 
           {/* Expand Arrow */}
           <button
-            onClick={onToggle}
+            onClick={() => hasChildren && onToggle()}
             className={`p-1 rounded transition-colors ${hasChildren ? 'hover:bg-gray-700 text-gray-400 hover:text-white' : 'text-gray-700 cursor-default'}`}
           >
             {isExpanded ? (
@@ -112,14 +136,19 @@ export function SortableParentRow({
             </div>
           )}
 
-          {/* Name & Info */}
+          {/* Name & Stats (stacked) */}
           <div
             className="flex-1 cursor-pointer"
-            onClick={() => onSelect(project)}
+            onClick={() => onPreview(project)}
+            onDoubleClick={() => onOpen(project)}
           >
             <div className="flex items-center gap-2">
               <h3 className="text-white font-semibold">{project.name}</h3>
               <span className="px-2 py-0.5 bg-purple-600/20 text-purple-400 rounded text-xs">Parent</span>
+            </div>
+            {/* Stats under project name */}
+            <div className="mt-1">
+              <StatsRow stats={stats} />
             </div>
             {/* Child environment summary */}
             {hasChildren && (
@@ -146,7 +175,7 @@ export function SortableParentRow({
             )}
           </div>
 
-          {/* Dev/Test/Prod ports - one of each */}
+          {/* Dev/Test/Prod ports */}
           <div className="flex items-center gap-2">
             {(childDevPorts[0] || project.port_dev) && (
               <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs">
@@ -183,7 +212,10 @@ export function SortableParentRow({
               <SortableChildRow
                 key={child.id}
                 child={child}
-                onSelect={onSelect}
+                parent={project}
+                stats={getChildStats(child.id)}
+                onPreview={onPreview}
+                onOpen={onOpen}
                 onEdit={onEdit}
               />
             ))}
@@ -194,13 +226,20 @@ export function SortableParentRow({
   );
 }
 
+// =============================================================================
+// SortableChildRow
+// =============================================================================
+
 interface SortableChildRowProps {
   child: Project;
-  onSelect: (project: Project) => void;
+  parent: Project;
+  stats: ProjectStats;
+  onPreview: (project: Project) => void;
+  onOpen: (project: Project) => void;
   onEdit: (project: Project) => void;
 }
 
-export function SortableChildRow({ child, onSelect, onEdit }: SortableChildRowProps) {
+export function SortableChildRow({ child, parent, stats, onPreview, onOpen, onEdit }: SortableChildRowProps) {
   const {
     attributes,
     listeners,
@@ -216,67 +255,82 @@ export function SortableChildRow({ child, onSelect, onEdit }: SortableChildRowPr
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const env = detectEnvironment(child);
+  const env = detectEnvironment(child, parent);
   const envColor = env ? ENV_COLORS[env] : null;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors group
+      className={`p-3 rounded-lg cursor-pointer transition-colors group
         ${envColor ? `${envColor.bg} border ${envColor.border}` : 'bg-gray-800 border border-gray-700'}
         hover:brightness-110`}
     >
-      {/* Drag Handle */}
-      <button
-        {...attributes}
-        {...listeners}
-        className="p-1 text-gray-500 hover:text-white cursor-grab active:cursor-grabbing"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical className="w-3 h-3" />
-      </button>
+      <div className="flex items-center gap-3">
+        {/* Drag Handle */}
+        <button
+          {...attributes}
+          {...listeners}
+          className="p-1 text-gray-500 hover:text-white cursor-grab active:cursor-grabbing"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="w-3 h-3" />
+        </button>
 
-      {/* Environment Badge */}
-      {envColor && (
-        <span className={`px-2 py-1 rounded text-xs font-medium ${envColor.text} ${envColor.bg}`}>
-          {envColor.label}
-        </span>
-      )}
+        {/* Environment Badge */}
+        {envColor && (
+          <span className={`px-2 py-1 rounded text-xs font-medium ${envColor.text} ${envColor.bg}`}>
+            {envColor.label}
+          </span>
+        )}
 
-      {/* Name */}
-      <span
-        className={`font-medium flex-1 ${envColor ? envColor.text : 'text-white'}`}
-        onClick={() => onSelect(child)}
-      >
-        {child.name}
-      </span>
+        {/* Name & Stats (stacked) */}
+        <div
+          className="flex-1"
+          onClick={() => onPreview(child)}
+          onDoubleClick={() => onOpen(child)}
+        >
+          <span className={`font-medium ${envColor ? envColor.text : 'text-white'}`}>
+            {child.name}
+          </span>
+          {/* Stats under project name */}
+          <div className="mt-0.5">
+            <StatsRow stats={stats} />
+          </div>
+        </div>
 
-      {/* Port */}
-      {(child.port_dev || child.port_test || child.port_prod) && (
-        <span className="text-gray-500 text-xs">
-          :{child.port_dev || child.port_test || child.port_prod}
-        </span>
-      )}
+        {/* Port */}
+        {(child.port_dev || child.port_test || child.port_prod) && (
+          <span className="text-gray-500 text-xs">
+            :{child.port_dev || child.port_test || child.port_prod}
+          </span>
+        )}
 
-      {/* Edit */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onEdit(child); }}
-        className="p-1 text-gray-500 hover:text-white hover:bg-gray-600 rounded opacity-0 group-hover:opacity-100 transition-all"
-      >
-        <Settings className="w-3 h-3" />
-      </button>
+        {/* Edit */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(child); }}
+          className="p-1 text-gray-500 hover:text-white hover:bg-gray-600 rounded opacity-0 group-hover:opacity-100 transition-all"
+        >
+          <Settings className="w-3 h-3" />
+        </button>
+      </div>
     </div>
   );
 }
 
+// =============================================================================
+// SortableOrphanRow
+// =============================================================================
+
 interface SortableOrphanRowProps {
   project: Project;
-  onSelect: (project: Project) => void;
+  stats: ProjectStats;
+  onPreview: (project: Project) => void;
+  onOpen: (project: Project) => void;
   onEdit: (project: Project) => void;
 }
 
-export function SortableOrphanRow({ project, onSelect, onEdit }: SortableOrphanRowProps) {
+export function SortableOrphanRow({ project, stats, onPreview, onOpen, onEdit }: SortableOrphanRowProps) {
   const {
     attributes,
     listeners,
@@ -322,8 +376,12 @@ export function SortableOrphanRow({ project, onSelect, onEdit }: SortableOrphanR
           </div>
         )}
 
-        {/* Name */}
-        <div className="flex-1" onClick={() => onSelect(project)}>
+        {/* Name & Stats (stacked) */}
+        <div
+          className="flex-1"
+          onClick={() => onPreview(project)}
+          onDoubleClick={() => onOpen(project)}
+        >
           <div className="flex items-center gap-2">
             <h3 className="text-white font-semibold">{project.name}</h3>
             {envColor && (
@@ -331,6 +389,10 @@ export function SortableOrphanRow({ project, onSelect, onEdit }: SortableOrphanR
                 {envColor.label}
               </span>
             )}
+          </div>
+          {/* Stats under project name */}
+          <div className="mt-1">
+            <StatsRow stats={stats} />
           </div>
           <span className="text-gray-500 text-xs">{project.slug}</span>
         </div>

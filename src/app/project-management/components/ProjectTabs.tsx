@@ -1,14 +1,16 @@
 'use client';
 
-import { CheckSquare, FileText, Table, Database, GitCommit, StickyNote, Bug, Brain, FolderTree, BookOpen } from 'lucide-react';
-import { TabType, TABS } from '../types';
+import { CheckSquare, FileText, Table, Database, GitCommit, StickyNote, Bug, Brain, FolderTree, BookOpen, Milestone } from 'lucide-react';
+import { TabType, TabConfig, TABS } from '../types';
 
 interface ProjectTabsProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
+  tabs?: TabConfig[];
 }
 
 const ICONS: Record<string, React.ReactNode> = {
+  Milestone: <Milestone className="w-4 h-4" />,
   CheckSquare: <CheckSquare className="w-4 h-4" />,
   Brain: <Brain className="w-4 h-4" />,
   FileText: <FileText className="w-4 h-4" />,
@@ -21,11 +23,13 @@ const ICONS: Record<string, React.ReactNode> = {
   BookOpen: <BookOpen className="w-4 h-4" />,
 };
 
-export default function ProjectTabs({ activeTab, onTabChange }: ProjectTabsProps) {
+export default function ProjectTabs({ activeTab, onTabChange, tabs }: ProjectTabsProps) {
+  const tabsToRender = tabs || TABS;
+
   return (
     <div className="bg-gray-800 border-b border-gray-700">
       <div className="flex items-center gap-1 px-6">
-        {TABS.map(tab => (
+        {tabsToRender.map(tab => (
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}

@@ -102,15 +102,47 @@ export interface Bug {
   resolved_at?: string;
 }
 
-export type TabType = 'todos' | 'knowledge' | 'docs' | 'database' | 'structure' | 'conventions' | 'notepad' | 'bugs';
+export interface ProjectStats {
+  todos: number;
+  bugs: number;
+  knowledge: number;
+  docs: number;
+  conventions: number;
+}
+
+export interface Phase {
+  id: string;
+  project_id: string;
+  phase_num: number;
+  name: string;
+  description?: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  created_at: string;
+}
+
+export interface PhaseItem {
+  id: string;
+  phase_id: string;
+  title: string;
+  description?: string;
+  status: 'pending' | 'completed';
+  sort_order: number;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TabType = 'phases' | 'todos' | 'knowledge' | 'docs' | 'database' | 'structure' | 'conventions' | 'notepad' | 'bugs';
 
 export interface TabConfig {
   id: TabType;
   label: string;
   icon: string;
+  parentOnly?: boolean;
 }
 
 export const TABS: TabConfig[] = [
+  { id: 'phases', label: 'Phases', icon: 'Milestone', parentOnly: true },
   { id: 'todos', label: 'Todos', icon: 'CheckSquare' },
   { id: 'knowledge', label: 'Knowledge', icon: 'Brain' },
   { id: 'docs', label: 'Docs', icon: 'FileText' },
