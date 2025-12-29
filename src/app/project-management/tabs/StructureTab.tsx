@@ -199,9 +199,9 @@ const TreeNodeRow = ({
   const childPrefix = [...parentPrefixes, isLast ? '    ' : '│   '];
 
   return (
-    <>
+    <div className="w-full">
       <div
-        className={`flex items-center gap-1 py-1 px-2 hover:bg-gray-700/50 group ${node.isFolder ? 'cursor-pointer' : ''}`}
+        className={`flex items-center gap-1 py-1 px-2 hover:bg-gray-700/50 group w-full ${node.isFolder ? 'cursor-pointer' : ''}`}
         onClick={() => node.isFolder && toggleFolder(node.path)}
       >
         {/* Tree prefix */}
@@ -276,7 +276,7 @@ const TreeNodeRow = ({
           onDelete={onDelete}
         />
       ))}
-    </>
+    </div>
   );
 };
 
@@ -354,7 +354,7 @@ const TreePanel = ({
           </button>
         </div>
       </div>
-      <div className="font-mono text-sm max-h-[500px] overflow-y-auto">
+      <div className="font-mono text-sm max-h-[500px] overflow-y-auto flex flex-col">
         <TreeNodeRow
           node={tree}
           depth={0}
