@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { FolderTree, Folder, FolderOpen, File, Plus, Edit2, Trash2, X, Save, Search, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
+import { FolderTree, Folder, FolderOpen, File, Plus, Edit2, Trash2, X, Save, Search, RefreshCw, ChevronRight, ChevronDown, Server, Monitor, GripVertical } from 'lucide-react';
 
 interface StructureItem {
   id: string;
@@ -25,6 +25,12 @@ interface TreeNode {
   children: TreeNode[];
 }
 
+interface ChildProject {
+  id: string;
+  name: string;
+  path: string;
+}
+
 interface StructureTabProps {
   projectPath: string;
   projectId: string;
@@ -32,6 +38,27 @@ interface StructureTabProps {
   isParent?: boolean;
   childProjectIds?: string[];
 }
+
+// Path detection helpers
+const isServerPath = (path: string): boolean => {
+  if (!path) return false;
+  const normalized = path.replace(/\\/g, '/');
+  return normalized.startsWith('/var/') ||
+         normalized.startsWith('/home/') ||
+         normalized.startsWith('/usr/') ||
+         normalized.startsWith('/etc/') ||
+         normalized.startsWith('/opt/');
+};
+
+const isLocalPath = (path: string): boolean => {
+  if (!path) return false;
+  const normalized = path.replace(/\\/g, '/');
+  return normalized.startsWith('C:/') ||
+         normalized.startsWith('C:\\') ||
+         normalized.startsWith('D:/') ||
+         normalized.startsWith('D:\\') ||
+         /^[A-Z]:[/\\]/.test(path);
+};
 
 // File extension colors
 const EXT_COLORS: Record<string, string> = {
@@ -253,43 +280,165 @@ const TreeNodeRow = ({
   );
 };
 
+// Tree Panel Component for Server/Local views
+interface TreePanelProps {
+  title: string;
+  icon: React.ReactNode;
+  items: StructureItem[];
+  expandedFolders: Set<string>;
+  toggleFolder: (path: string) => void;
+  onExpandAll: () => void;
+  onCollapseAll: () => void;
+  onEdit?: (id: string, name: string, annotation: string) => void;
+  onDelete?: (id: string) => void;
+}
+
+const TreePanel = ({
+  title,
+  icon,
+  items,
+  expandedFolders,
+  toggleFolder,
+  onExpandAll,
+  onCollapseAll,
+  onEdit,
+  onDelete,
+}: TreePanelProps) => {
+  const { tree, commonRoot } = useMemo(() => {
+    const paths = items
+      .map(i => i.description || '')
+      .filter(p => p && p.includes('/'));
+
+    const commonRoot = findCommonRoot(paths);
+    const tree = buildTree(items, commonRoot);
+
+    return { tree, commonRoot };
+  }, [items]);
+
+  if (items.length === 0) {
+    return (
+      <div className="flex-1 bg-gray-800 rounded-lg border border-gray-700 p-4">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-700">
+          {icon}
+          <span className="text-white font-medium">{title}</span>
+          <span className="text-gray-500 text-sm">(0 files)</span>
+        </div>
+        <div className="text-center py-8 text-gray-500">
+          <FolderTree className="w-10 h-10 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No files discovered</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-gray-900/50">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-white font-medium">{title}</span>
+          <span className="text-gray-500 text-sm">({items.length} files)</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onExpandAll}
+            className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded"
+          >
+            Expand
+          </button>
+          <button
+            onClick={onCollapseAll}
+            className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded"
+          >
+            Collapse
+          </button>
+        </div>
+      </div>
+      <div className="font-mono text-sm max-h-[500px] overflow-y-auto">
+        <TreeNodeRow
+          node={tree}
+          depth={0}
+          isLast={true}
+          parentPrefixes={[]}
+          expandedFolders={expandedFolders}
+          toggleFolder={toggleFolder}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      </div>
+    </div>
+  );
+};
+
 export default function StructureTab({ projectId, projectName, isParent, childProjectIds }: StructureTabProps) {
   const [items, setItems] = useState<StructureItem[]>([]);
+  const [childProjects, setChildProjects] = useState<ChildProject[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '', annotation: '' });
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [serverExpandedFolders, setServerExpandedFolders] = useState<Set<string>>(new Set());
+  const [localExpandedFolders, setLocalExpandedFolders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchStructure();
+    if (isParent && childProjectIds?.length) {
+      fetchChildProjects();
+    }
   }, [projectId, isParent, childProjectIds]);
+
+  const fetchChildProjects = async () => {
+    if (!childProjectIds?.length) return;
+
+    try {
+      const children: ChildProject[] = [];
+      for (const cid of childProjectIds) {
+        const res = await fetch(`/project-management/api/projects/${cid}`);
+        const data = await res.json();
+        if (data.success && data.project) {
+          children.push({
+            id: data.project.id,
+            name: data.project.name,
+            path: data.project.path || '',
+          });
+        }
+      }
+      setChildProjects(children);
+      // Auto-select first child
+      if (children.length > 0 && !selectedChildId) {
+        setSelectedChildId(children[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching child projects:', error);
+    }
+  };
 
   const fetchStructure = async () => {
     setIsLoading(true);
     try {
-      const projectIdsToFetch = isParent && childProjectIds?.length
-        ? [projectId, ...childProjectIds]
-        : [projectId];
+      // For parent view with selected child, only fetch that child's items
+      const projectIdToFetch = isParent && selectedChildId ? selectedChildId : projectId;
 
-      const allItems: StructureItem[] = [];
-
-      for (const pid of projectIdsToFetch) {
-        const res = await fetch(`/project-management/api/conventions?project_id=${pid}&convention_type=structure`);
-        const data = await res.json();
-        if (data.success && data.conventions) {
-          allItems.push(...data.conventions);
-        }
+      const res = await fetch(`/project-management/api/conventions?project_id=${projectIdToFetch}&convention_type=structure`);
+      const data = await res.json();
+      if (data.success && data.conventions) {
+        setItems(data.conventions);
       }
-
-      setItems(allItems);
     } catch (error) {
       console.error('Error fetching structure:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Re-fetch when selected child changes
+  useEffect(() => {
+    if (isParent && selectedChildId) {
+      fetchStructure();
+    }
+  }, [selectedChildId]);
 
   // Filter items by search
   const filteredItems = useMemo(() => {
@@ -301,36 +450,48 @@ export default function StructureTab({ projectId, projectName, isParent, childPr
     );
   }, [items, searchQuery]);
 
-  // Build tree from filtered items
-  const { tree, commonRoot } = useMemo(() => {
-    const paths = filteredItems
-      .map(i => i.description || '')
-      .filter(p => p && p.includes('/'));
+  // Split items into server and local
+  const { serverItems, localItems } = useMemo(() => {
+    const server: StructureItem[] = [];
+    const local: StructureItem[] = [];
 
-    const commonRoot = findCommonRoot(paths);
-    const tree = buildTree(filteredItems, commonRoot);
-
-    // Auto-expand root
-    if (commonRoot && !expandedFolders.has(commonRoot)) {
-      setExpandedFolders(new Set([commonRoot]));
+    for (const item of filteredItems) {
+      const path = item.description || '';
+      if (isServerPath(path)) {
+        server.push(item);
+      } else if (isLocalPath(path)) {
+        local.push(item);
+      } else {
+        // Unknown paths go to local by default
+        local.push(item);
+      }
     }
 
-    return { tree, commonRoot };
+    return { serverItems: server, localItems: local };
   }, [filteredItems]);
 
-  const toggleFolder = (path: string) => {
-    setExpandedFolders(prev => {
+  const toggleServerFolder = (path: string) => {
+    setServerExpandedFolders(prev => {
       const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   };
 
-  const expandAll = () => {
+  const toggleLocalFolder = (path: string) => {
+    setLocalExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
+  const expandAllServer = () => {
+    const paths = serverItems.map(i => i.description || '').filter(p => p);
+    const commonRoot = findCommonRoot(paths);
+    const tree = buildTree(serverItems, commonRoot);
     const allFolders = new Set<string>();
     const collectFolders = (node: TreeNode) => {
       if (node.isFolder) {
@@ -339,11 +500,34 @@ export default function StructureTab({ projectId, projectName, isParent, childPr
       }
     };
     collectFolders(tree);
-    setExpandedFolders(allFolders);
+    setServerExpandedFolders(allFolders);
   };
 
-  const collapseAll = () => {
-    setExpandedFolders(new Set([commonRoot]));
+  const collapseAllServer = () => {
+    const paths = serverItems.map(i => i.description || '').filter(p => p);
+    const commonRoot = findCommonRoot(paths);
+    setServerExpandedFolders(new Set([commonRoot]));
+  };
+
+  const expandAllLocal = () => {
+    const paths = localItems.map(i => i.description || '').filter(p => p);
+    const commonRoot = findCommonRoot(paths);
+    const tree = buildTree(localItems, commonRoot);
+    const allFolders = new Set<string>();
+    const collectFolders = (node: TreeNode) => {
+      if (node.isFolder) {
+        allFolders.add(node.path);
+        node.children.forEach(collectFolders);
+      }
+    };
+    collectFolders(tree);
+    setLocalExpandedFolders(allFolders);
+  };
+
+  const collapseAllLocal = () => {
+    const paths = localItems.map(i => i.description || '').filter(p => p);
+    const commonRoot = findCommonRoot(paths);
+    setLocalExpandedFolders(new Set([commonRoot]));
   };
 
   const handleSave = async () => {
@@ -354,11 +538,13 @@ export default function StructureTab({ projectId, projectName, isParent, childPr
         ? `/project-management/api/conventions/${editingId}`
         : '/project-management/api/conventions';
 
+      const targetProjectId = isParent && selectedChildId ? selectedChildId : projectId;
+
       const res = await fetch(url, {
         method: editingId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project_id: projectId,
+          project_id: targetProjectId,
           convention_type: 'structure',
           name: formData.name,
           description: formData.description,
@@ -407,7 +593,7 @@ export default function StructureTab({ projectId, projectName, isParent, childPr
     setFormData({ name: '', description: '', annotation: '' });
   };
 
-  if (isLoading) {
+  if (isLoading && items.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="w-6 h-6 text-blue-400 animate-spin" />
@@ -423,26 +609,17 @@ export default function StructureTab({ projectId, projectName, isParent, childPr
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
             <FolderTree className="w-5 h-5 text-yellow-400" />
             File Structure
+            {isParent && selectedChildId && (
+              <span className="text-sm text-gray-400 font-normal">
+                - {childProjects.find(c => c.id === selectedChildId)?.name}
+              </span>
+            )}
           </h2>
           <p className="text-sm text-gray-400">
-            {items.length} files discovered by Jen
+            {serverItems.length} server + {localItems.length} local files
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={expandAll}
-            className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-            title="Expand all"
-          >
-            Expand
-          </button>
-          <button
-            onClick={collapseAll}
-            className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-            title="Collapse all"
-          >
-            Collapse
-          </button>
           <button
             onClick={fetchStructure}
             className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
@@ -536,30 +713,64 @@ export default function StructureTab({ projectId, projectName, isParent, childPr
         </div>
       )}
 
-      {/* Tree View */}
-      {filteredItems.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
-          <FolderTree className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>No file structure discovered yet.</p>
-          <p className="text-sm mt-1">Jen will extract file paths from your coding sessions.</p>
-        </div>
-      ) : (
-        <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-          {/* Tree container */}
-          <div className="font-mono text-sm">
-            <TreeNodeRow
-              node={tree}
-              depth={0}
-              isLast={true}
-              parentPrefixes={[]}
-              expandedFolders={expandedFolders}
-              toggleFolder={toggleFolder}
-              onEdit={startEdit}
-              onDelete={handleDelete}
-            />
+      {/* Main Content - Parent view with children sidebar OR Child view with split trees */}
+      <div className="flex gap-4">
+        {/* Children Sidebar - Only for Parent projects */}
+        {isParent && childProjects.length > 0 && (
+          <div className="w-64 flex-shrink-0 bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+            <div className="px-3 py-2 border-b border-gray-700 bg-gray-900/50">
+              <span className="text-white font-medium text-sm">Child Projects</span>
+              <span className="text-gray-500 text-xs ml-2">({childProjects.length})</span>
+            </div>
+            <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto">
+              {childProjects.map((child) => (
+                <div
+                  key={child.id}
+                  onClick={() => setSelectedChildId(child.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded cursor-pointer transition-colors ${
+                    selectedChildId === child.id
+                      ? 'bg-blue-600/30 border border-blue-500/50'
+                      : 'hover:bg-gray-700/50 border border-transparent'
+                  }`}
+                >
+                  <GripVertical className="w-4 h-4 text-gray-600 cursor-grab" />
+                  <Folder className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                  <span className="text-sm text-gray-300 truncate">{child.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
+        )}
+
+        {/* Split Tree View - Server | Local */}
+        <div className="flex-1 flex gap-4">
+          {/* Server Tree */}
+          <TreePanel
+            title="Server"
+            icon={<Server className="w-4 h-4 text-green-400" />}
+            items={serverItems}
+            expandedFolders={serverExpandedFolders}
+            toggleFolder={toggleServerFolder}
+            onExpandAll={expandAllServer}
+            onCollapseAll={collapseAllServer}
+            onEdit={startEdit}
+            onDelete={handleDelete}
+          />
+
+          {/* Local Tree */}
+          <TreePanel
+            title="Local"
+            icon={<Monitor className="w-4 h-4 text-blue-400" />}
+            items={localItems}
+            expandedFolders={localExpandedFolders}
+            toggleFolder={toggleLocalFolder}
+            onExpandAll={expandAllLocal}
+            onCollapseAll={collapseAllLocal}
+            onEdit={startEdit}
+            onDelete={handleDelete}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 }
