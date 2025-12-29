@@ -3,38 +3,23 @@ import { db } from '@/lib/db';
 
 /**
  * GET /api/project-knowledge
- * Fetch knowledge items for a project (decisions, todos, blockers, tech_notes, etc.)
+ * Fetch knowledge items for a project by project_id
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('project_id');
-    let projectPath = searchParams.get('project_path');
     const type = searchParams.get('type');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    // If project_id provided, look up the project_path
-    if (projectId && !projectPath) {
-      const { data: projectData } = await db
-        .from('dev_projects')
-        .select('server_path')
-        .eq('id', projectId)
-        .single();
-      const project = projectData as Record<string, unknown> | null;
-
-      if (project?.server_path) {
-        projectPath = String(project.server_path);
-      }
-    }
-
-    if (!projectPath) {
-      return NextResponse.json({ error: 'project_id or project_path is required' }, { status: 400 });
+    if (!projectId) {
+      return NextResponse.json({ error: 'project_id is required' }, { status: 400 });
     }
 
     let query = db
       .from('dev_ai_knowledge')
       .select('*')
-      .eq('project_path', projectPath)
+      .eq('project_id', projectId)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -66,35 +51,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project_id, project_path, category, title, summary, session_id } = body;
+    const { project_id, category, title, summary, session_id } = body;
 
-    // Resolve project_path from project_id if needed
-    let resolvedPath = project_path;
-    if (project_id && !resolvedPath) {
-      const { data: projectData } = await db
-        .from('dev_projects')
-        .select('server_path')
-        .eq('id', project_id)
-        .single();
-      const project = projectData as Record<string, unknown> | null;
-
-      if (project?.server_path) {
-        resolvedPath = String(project.server_path);
-      }
-    }
-
-    if (!resolvedPath || !category || !title) {
-      return NextResponse.json({ error: 'project_path (or project_id), category, and title are required' }, { status: 400 });
+    if (!project_id || !category || !title) {
+      return NextResponse.json({ error: 'project_id, category, and title are required' }, { status: 400 });
     }
 
     const { data: item, error } = await db
       .from('dev_ai_knowledge')
       .insert({
-        project_path: resolvedPath,
+        project_id,
         category,
         title,
         summary: summary || null,
-        session_id: session_id || null,
+        source_session_id: session_id || null,
         source: 'manual',
       })
       .select()

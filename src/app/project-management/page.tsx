@@ -123,8 +123,8 @@ function ProjectManagementContent() {
   }
 
   // Get stats for a project (with parent aggregation)
-  const getProjectStats = (projectId: string, isParent?: boolean): ProjectStats => {
-    if (isParent) {
+  const getProjectStats = (projectId: string, _isParent?: boolean): ProjectStats => {
+    if (false && _isParent) { // API now handles aggregation
       // Aggregate children stats
       const childIds = childProjects.filter(p => p.parent_id === projectId).map(p => p.id);
       const aggregated: ProjectStats = { todos: 0, knowledge: 0, docs: 0, conventions: 0, bugs: 0 };
@@ -154,29 +154,28 @@ function ProjectManagementContent() {
     }
     return projectStats[projectId] || { todos: 0, knowledge: 0, docs: 0, conventions: 0, bugs: 0 };
   };
-
-  // Stats display component - horizontal row with equal columns
+// Stats display component - labeled row matching session-logs colors
   const StatsColumn = ({ stats }: { stats: ProjectStats }) => {
     const hasAny = stats.todos || stats.knowledge || stats.docs || stats.conventions || stats.bugs;
     if (!hasAny) return null;
 
     return (
-      <div className="flex items-center gap-1">
-        <div className="w-12 text-center px-1.5 py-0.5 bg-blue-600/20 rounded">
-          <span className="text-xs font-medium text-blue-400">{stats.todos}</span>
-        </div>
-        <div className="w-12 text-center px-1.5 py-0.5 bg-purple-600/20 rounded">
-          <span className="text-xs font-medium text-purple-400">{stats.knowledge}</span>
-        </div>
-        <div className="w-12 text-center px-1.5 py-0.5 bg-green-600/20 rounded">
-          <span className="text-xs font-medium text-green-400">{stats.docs}</span>
-        </div>
-        <div className="w-12 text-center px-1.5 py-0.5 bg-yellow-600/20 rounded">
-          <span className="text-xs font-medium text-yellow-400">{stats.conventions}</span>
-        </div>
-        <div className="w-12 text-center px-1.5 py-0.5 bg-red-600/20 rounded">
-          <span className="text-xs font-medium text-red-400">{stats.bugs}</span>
-        </div>
+      <div className="flex items-center gap-3 text-xs">
+        {stats.todos > 0 && (
+          <span className="text-blue-400">Todos {stats.todos}</span>
+        )}
+        {stats.bugs > 0 && (
+          <span className="text-red-400">Bugs {stats.bugs}</span>
+        )}
+        {stats.knowledge > 0 && (
+          <span className="text-green-400">Knowledge {stats.knowledge}</span>
+        )}
+        {stats.docs > 0 && (
+          <span className="text-cyan-400">Docs {stats.docs}</span>
+        )}
+        {stats.conventions > 0 && (
+          <span className="text-purple-400">Structure {stats.conventions}</span>
+        )}
       </div>
     );
   };

@@ -45,16 +45,8 @@ const CATEGORIES = [
   { id: 'quirk', label: 'Quirks & Gotchas', icon: AlertTriangle },
 ];
 
-interface ProjectPath {
-  id: string;
-  project_id: string;
-  path: string;
-  label: string;
-}
-
-export default function ConventionsTab({ projectPath, projectId, isParent, childProjectIds }: ConventionsTabProps) {
+export default function ConventionsTab({ projectId, isParent, childProjectIds }: ConventionsTabProps) {
   const [conventions, setConventions] = useState<Convention[]>([]);
-  const [projectPaths, setProjectPaths] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -66,68 +58,23 @@ export default function ConventionsTab({ projectPath, projectId, isParent, child
     example: '',
   });
 
-  // Fetch conventions directly using projectPath (like TodosTab)
+  // Fetch conventions using project_id (UUID)
   useEffect(() => {
-    fetchConventionsDirect(projectPath);
-  }, [projectPath]);
-
-  // Also fetch project paths for multi-path aggregation
-  useEffect(() => {
-    fetchProjectPaths();
+    fetchConventions();
   }, [projectId, isParent, childProjectIds]);
 
-  const fetchProjectPaths = async () => {
-    try {
-      // If parent, fetch paths for all child projects
-      const projectIdsToFetch = isParent && childProjectIds?.length
-        ? childProjectIds
-        : [projectId];
-
-      const allPaths: string[] = [];
-
-      for (const pid of projectIdsToFetch) {
-        const response = await fetch(`/project-management/api/project-paths?project_id=${pid}`);
-        const data = await response.json();
-        if (data.success && data.paths) {
-          data.paths.forEach((p: ProjectPath) => allPaths.push(p.path));
-        }
-      }
-
-      // If no paths found, use the projectPath directly
-      if (allPaths.length === 0) {
-        allPaths.push(projectPath);
-      }
-
-      setProjectPaths(allPaths);
-    } catch (error) {
-      console.error('Error fetching project paths:', error);
-      setProjectPaths([projectPath]);
-    }
-  };
-
-  const fetchConventionsDirect = async (path: string) => {
-    if (!path) return;
+  const fetchConventions = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/project-management/api/conventions?project_path=${encodeURIComponent(path)}`);
-      const data = await res.json();
-      if (data.success && data.conventions) {
-        setConventions(data.conventions);
-      }
-    } catch (error) {
-      console.error('Error fetching conventions:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      // If parent, fetch for all child projects + parent
+      const projectIdsToFetch = isParent && childProjectIds?.length
+        ? [projectId, ...childProjectIds]
+        : [projectId];
 
-  const fetchConventions = async () => {
-    try {
       const allConventions: Convention[] = [];
 
-      // Fetch conventions from all project paths
-      for (const path of projectPaths) {
-        const res = await fetch(`/project-management/api/conventions?project_path=${encodeURIComponent(path)}`);
+      for (const pid of projectIdsToFetch) {
+        const res = await fetch(`/project-management/api/conventions?project_id=${pid}`);
         const data = await res.json();
         if (data.success && data.conventions) {
           allConventions.push(...data.conventions);
@@ -149,12 +96,12 @@ export default function ConventionsTab({ projectPath, projectId, isParent, child
       const url = editingId
         ? `/project-management/api/conventions/${editingId}`
         : '/project-management/api/conventions';
-      
+
       const res = await fetch(url, {
         method: editingId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project_path: projectPath,
+          project_id: projectId,
           ...formData,
         }),
       });

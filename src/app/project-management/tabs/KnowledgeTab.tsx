@@ -88,7 +88,7 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
 
   // Fetch knowledge directly using projectPath (like TodosTab)
   useEffect(() => {
-    fetchKnowledge(projectPath);
+    fetchKnowledge(projectId);
   }, [projectPath]);
 
   // Also fetch project paths for folder selector
@@ -157,20 +157,39 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
       ]);
     } catch (error) { console.error('Error moving folder:', error); fetchProjectPaths(); }
   };
-
-  const fetchKnowledge = async (path: string) => {
-    if (!path) return;
+  const fetchKnowledge = async (id: string) => {
+    if (!id) return;
     setIsLoading(true);
     try {
-      const projectId = path.startsWith('/') ? path.slice(1) : path;
-      const response = await fetch(`/project-management/api/clair/knowledge/${projectId}`);
-      const data = await response.json();
-      if (data.success) {
-        setEntries(data.entries || []);
-        setGrouped(data.grouped || {});
+      // Fetch for parent and all children if parent project
+      const idsToFetch = isParent && childProjectIds?.length 
+        ? [id, ...childProjectIds] 
+        : [id];
+      
+      const allEntries: KnowledgeEntry[] = [];
+      for (const pid of idsToFetch) {
+        const response = await fetch(`/project-management/api/clair/knowledge/${pid}`);
+        const data = await response.json();
+        if (data.success && data.entries) {
+          allEntries.push(...data.entries);
+        }
       }
+      
+      // Sort by created_at desc
+      allEntries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      // Group by category
+      const grouped: Record<string, KnowledgeEntry[]> = {};
+      for (const entry of allEntries) {
+        const cat = entry.category || "other";
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(entry);
+      }
+      
+      setEntries(allEntries);
+      setGrouped(grouped);
     } catch (error) {
-      console.error('Error fetching knowledge:', error);
+      console.error("Error fetching knowledge:", error);
     } finally {
       setIsLoading(false);
     }
@@ -200,9 +219,9 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
   const handleDelete = async (entry: KnowledgeEntry) => {
     if (!confirm('Delete this entry?')) return;
     try {
-      const projectId = projectPath.startsWith('/') ? projectPath.slice(1) : projectPath;
+      // Use the component's projectId prop directly
       await fetch(`/project-management/api/clair/knowledge/${projectId}/${entry.id}`, { method: 'DELETE' });
-      fetchKnowledge(projectPath);
+      fetchKnowledge(projectId);
     } catch (error) {
       console.error('Error deleting entry:', error);
     }

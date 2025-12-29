@@ -3,16 +3,22 @@ import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const projectPath = searchParams.get('project_path');
+  const projectId = searchParams.get('project_id');
+  const conventionType = searchParams.get('convention_type');
 
   try {
     let query = db
       .from('dev_ai_conventions')
       .select('*')
-      .order('category', { ascending: true });
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
 
-    if (projectPath) {
-      query = query.eq('project_path', projectPath);
+    if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+
+    if (conventionType) {
+      query = query.eq('convention_type', conventionType);
     }
 
     const { data, error } = await query;
@@ -31,16 +37,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project_path, category, title, description, examples } = body;
+    const { project_id, convention_type, name, description, example } = body;
 
     const { data, error } = await db
       .from('dev_ai_conventions')
       .insert({
-        project_path,
-        category,
-        title,
+        project_id,
+        convention_type,
+        name,
         description,
-        examples,
+        example,
+        status: 'active',
       })
       .select('*');
 
