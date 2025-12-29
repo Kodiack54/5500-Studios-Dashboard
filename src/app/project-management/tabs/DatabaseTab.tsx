@@ -181,6 +181,18 @@ export default function DatabaseTab({ projectId, projectName, isParent, childPro
     });
   };
 
+  const copyToClipboard = async (item: DatabaseItem) => {
+    await navigator.clipboard.writeText(item.description || item.name);
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const filteredItems = items.filter(item => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return item.name.toLowerCase().includes(q) || (item.description || '').toLowerCase().includes(q);
+  });
+
   // Separate items into categories
   const schemas = filteredItems.filter(item => getEntryType(item.name) === 'schema');
   const usageItems = filteredItems.filter(item => getEntryType(item.name) === 'usage');
@@ -193,18 +205,6 @@ export default function DatabaseTab({ projectId, projectName, isParent, childPro
     acc[tableName].push(item);
     return acc;
   }, {} as Record<string, DatabaseItem[]>);
-
-  const copyToClipboard = async (item: DatabaseItem) => {
-    await navigator.clipboard.writeText(item.description || item.name);
-    setCopiedId(item.id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const filteredItems = items.filter(item => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return item.name.toLowerCase().includes(q) || (item.description || '').toLowerCase().includes(q);
-  });
 
   if (isLoading) {
     return (
