@@ -398,9 +398,9 @@ export default function TerminalPage() {
                   {formatTime(msg.timestamp)}
                 </span>
                 <div className="flex-shrink-0 mt-0.5">{getMessageIcon(msg.type)}</div>
-                <span className={`flex-1 break-all ${getMessageColor(msg.type)}`}>
+                <pre className={`flex-1 whitespace-pre-wrap break-all ${getMessageColor(msg.type)}`}>
                   {msg.content}
-                </span>
+                </pre>
               </div>
             ))
           )}
