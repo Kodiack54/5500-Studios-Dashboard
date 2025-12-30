@@ -70,8 +70,8 @@ export default function TerminalPage() {
     setWsStatus('connecting');
 
     try {
-      // Connect to terminal-server-5400
-      const ws = new WebSocket('ws://161.35.229.220:5400');
+      // Connect to terminal-server-5400 as monitor to receive broadcasts
+      const ws = new WebSocket('ws://161.35.229.220:5400?mode=monitor');
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -91,21 +91,34 @@ export default function TerminalPage() {
         try {
           const data = JSON.parse(event.data);
 
-          // Handle different message types from terminal server
-          if (data.type === 'output' || data.type === 'message') {
+          // Handle monitor mode message types from terminal server
+          if (data.type === 'monitor_connected') {
+            addMessage('system', `Monitor connected - ${data.activeSessions} active sessions`);
+          } else if (data.type === 'monitor_output') {
+            // Main output broadcast from sessions - strip ANSI codes
+            const content = (data.data || '').replace(/\x1b\[[0-9;]*m/g, '').trim();
+            if (!content) return;
+            // Detect message type from content
+            if (content.includes('External Claude') || content.includes('🤖')) {
+              addMessage('claude', content);
+            } else if (content.includes('User') || content.includes('👤') || content.includes('input]')) {
+              addMessage('user', content);
+            } else {
+              addMessage('system', content);
+            }
+          } else if (data.type === 'session_started') {
+            addMessage('system', `Session started: ${data.mode} mode - ${data.activeSessions} active`);
+          } else if (data.type === 'session_ended') {
+            addMessage('system', `Session ended - ${data.activeSessions} remaining`);
+          } else if (data.type === 'output' || data.type === 'message') {
             const content = data.content || data.text || data.data || JSON.stringify(data);
-            const role = data.role || 'assistant';
-            const msgType = role === 'user' ? 'user' : role === 'assistant' ? 'claude' : 'system';
-            addMessage(msgType, content, role);
+            addMessage('claude', content);
           } else if (data.type === 'tool_use' || data.type === 'tool') {
             addMessage('tool', `Tool: ${data.name || 'unknown'} - ${data.status || ''}`);
           } else if (data.type === 'error') {
             addMessage('error', data.message || data.error || 'Unknown error');
-          } else if (data.type === 'heartbeat' || data.type === 'ping') {
-            // Ignore heartbeats in the feed, just confirms connection
-          } else if (data.content || data.text) {
-            // Generic message with content
-            addMessage('claude', data.content || data.text);
+          } else if (data.content || data.text || data.data) {
+            addMessage('system', data.content || data.text || data.data);
           }
         } catch {
           // Raw text message
