@@ -161,31 +161,52 @@ export default function KnowledgeTab({ projectPath, projectId, projectName, isPa
     if (!id) return;
     setIsLoading(true);
     try {
-      // Fetch for parent and all children if parent project
-      const idsToFetch = isParent && childProjectIds?.length 
-        ? [id, ...childProjectIds] 
+      const idsToFetch = isParent && childProjectIds?.length
+        ? [id, ...childProjectIds]
         : [id];
-      
+
       const allEntries: KnowledgeEntry[] = [];
+
       for (const pid of idsToFetch) {
-        const response = await fetch(`/project-management/api/clair/knowledge/${pid}`);
-        const data = await response.json();
-        if (data.success && data.entries) {
-          allEntries.push(...data.entries);
+        // dev_ai_knowledge (Ideas, Quirks & Gotchas, Other)
+        const knowledgeRes = await fetch(`/project-management/api/clair/knowledge/${pid}`);
+        const knowledgeData = await knowledgeRes.json();
+        if (knowledgeData.success && knowledgeData.entries) {
+          allEntries.push(...knowledgeData.entries);
+        }
+
+        // dev_ai_journal (Work Log, Journal)
+        const journalRes = await fetch(`/project-management/api/clair/journal/${pid}`);
+        const journalData = await journalRes.json();
+        if (journalData.success && journalData.entries) {
+          const mappedJournal = journalData.entries.map((e: any) => ({
+            ...e,
+            category: e.entry_type || 'Journal',
+          }));
+          allEntries.push(...mappedJournal);
+        }
+
+        // dev_ai_decisions (Decisions)
+        const decisionsRes = await fetch(`/project-management/api/clair/decisions/${pid}`);
+        const decisionsData = await decisionsRes.json();
+        if (decisionsData.success && decisionsData.entries) {
+          const mappedDecisions = decisionsData.entries.map((e: any) => ({
+            ...e,
+            category: 'Decisions',
+          }));
+          allEntries.push(...mappedDecisions);
         }
       }
-      
-      // Sort by created_at desc
+
       allEntries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
-      // Group by category
+
       const grouped: Record<string, KnowledgeEntry[]> = {};
       for (const entry of allEntries) {
         const cat = entry.category || "other";
         if (!grouped[cat]) grouped[cat] = [];
         grouped[cat].push(entry);
       }
-      
+
       setEntries(allEntries);
       setGrouped(grouped);
     } catch (error) {

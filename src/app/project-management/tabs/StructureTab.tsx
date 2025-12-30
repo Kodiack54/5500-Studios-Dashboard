@@ -199,9 +199,9 @@ const TreeNodeRow = ({
   const childPrefix = [...parentPrefixes, isLast ? '    ' : '│   '];
 
   return (
-    <div className="w-full">
+    <div className="block w-full">
       <div
-        className={`flex items-center gap-1 py-1 px-2 hover:bg-gray-700/50 group w-full ${node.isFolder ? 'cursor-pointer' : ''}`}
+        className={`flex items-center flex-nowrap gap-1 py-1 px-2 hover:bg-gray-700/50 group w-full ${node.isFolder ? 'cursor-pointer' : ''}`}
         onClick={() => node.isFolder && toggleFolder(node.path)}
       >
         {/* Tree prefix */}

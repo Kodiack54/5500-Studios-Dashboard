@@ -249,6 +249,17 @@ export default function Sidebar() {
               <span>🤖</span>
               <span>AI Team</span>
             </Link>
+            <Link
+              href="/terminal"
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname?.startsWith('/terminal')
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              <span>💻</span>
+              <span>Terminal</span>
+            </Link>
           </div>
         )}
 
