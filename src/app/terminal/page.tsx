@@ -1,23 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, Activity, Cpu, MessageSquare, Clock, Zap, RefreshCw, Terminal as TerminalIcon, Circle, Power, AlertTriangle } from 'lucide-react';
+import { Heart, Activity, Cpu, MessageSquare, Clock, Zap, RefreshCw, Terminal as TerminalIcon, Power, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 
-interface HeartbeatData {
-  timestamp: string;
-  status: 'alive' | 'processing' | 'idle' | 'offline';
-  uptime: number;
-  lastActivity?: string;
-  sessionsToday?: number;
-  itemsExtracted?: number;
-}
-
-interface ActivityItem {
+interface TerminalMessage {
   id: string;
   timestamp: string;
-  type: 'heartbeat' | 'session' | 'extraction' | 'error' | 'system' | 'restart';
-  message: string;
-  details?: string;
+  type: 'claude' | 'system' | 'user' | 'error' | 'tool';
+  content: string;
+  role?: string;
 }
 
 interface ServerStatus {
@@ -31,42 +22,33 @@ interface ServerStatus {
 export default function TerminalPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [server5400Status, setServer5400Status] = useState<ServerStatus>({ online: false });
-  const [heartbeat, setHeartbeat] = useState<HeartbeatData | null>(null);
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [pulseCount, setPulseCount] = useState(0);
-  const [lastPulse, setLastPulse] = useState<Date | null>(null);
+  const [messages, setMessages] = useState<TerminalMessage[]>([]);
+  const [messageCount, setMessageCount] = useState(0);
   const [isRestarting, setIsRestarting] = useState(false);
-  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
-  const activityRef = useRef<HTMLDivElement>(null);
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
+  const wsRef = useRef<WebSocket | null>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const reconnectRef = useRef<NodeJS.Timeout | null>(null);
+  const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Format uptime into human readable
-  const formatUptime = (seconds: number) => {
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${mins}m`;
-    return `${mins}m`;
-  };
-
-  // Add activity to feed
-  const addActivity = useCallback((type: ActivityItem['type'], message: string, details?: string) => {
-    const newActivity: ActivityItem = {
-      id: Date.now().toString(),
+  // Add message to feed
+  const addMessage = useCallback((type: TerminalMessage['type'], content: string, role?: string) => {
+    const newMessage: TerminalMessage = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       timestamp: new Date().toISOString(),
       type,
-      message,
-      details
+      content,
+      role
     };
-    setActivities(prev => [newActivity, ...prev].slice(0, 100));
+    setMessages(prev => [newMessage, ...prev].slice(0, 500)); // Keep last 500
+    setMessageCount(prev => prev + 1);
   }, []);
 
-  // Check terminal-server-5400 status
-  const checkServer5400 = useCallback(async () => {
+  // Check server status via API
+  const checkServerStatus = useCallback(async () => {
     try {
       const res = await fetch('/terminal/api/status');
       const data = await res.json();
-
       setServer5400Status({
         online: data.online || false,
         uptime: data.uptime,
@@ -74,103 +56,166 @@ export default function TerminalPage() {
         memory: data.memory,
         restarts: data.restarts
       });
-
       return data.online;
-    } catch (err) {
+    } catch {
       setServer5400Status({ online: false });
       return false;
     }
   }, []);
+
+  // Connect to WebSocket
+  const connectWebSocket = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    setWsStatus('connecting');
+
+    try {
+      // Connect to terminal-server-5400
+      const ws = new WebSocket('ws://161.35.229.220:5400');
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setWsStatus('connected');
+        setIsConnected(true);
+        addMessage('system', 'Connected to terminal-server-5400');
+
+        // Send identify message
+        ws.send(JSON.stringify({
+          type: 'identify',
+          clientType: 'dashboard',
+          name: 'Terminal Monitor'
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Handle different message types from terminal server
+          if (data.type === 'output' || data.type === 'message') {
+            const content = data.content || data.text || data.data || JSON.stringify(data);
+            const role = data.role || 'assistant';
+            const msgType = role === 'user' ? 'user' : role === 'assistant' ? 'claude' : 'system';
+            addMessage(msgType, content, role);
+          } else if (data.type === 'tool_use' || data.type === 'tool') {
+            addMessage('tool', `Tool: ${data.name || 'unknown'} - ${data.status || ''}`);
+          } else if (data.type === 'error') {
+            addMessage('error', data.message || data.error || 'Unknown error');
+          } else if (data.type === 'heartbeat' || data.type === 'ping') {
+            // Ignore heartbeats in the feed, just confirms connection
+          } else if (data.content || data.text) {
+            // Generic message with content
+            addMessage('claude', data.content || data.text);
+          }
+        } catch {
+          // Raw text message
+          if (event.data && typeof event.data === 'string' && event.data.length > 0) {
+            addMessage('system', event.data);
+          }
+        }
+      };
+
+      ws.onclose = () => {
+        setWsStatus('disconnected');
+        setIsConnected(false);
+        addMessage('error', 'Disconnected from terminal server');
+
+        // Auto-reconnect after 5 seconds
+        if (reconnectRef.current) clearTimeout(reconnectRef.current);
+        reconnectRef.current = setTimeout(() => {
+          connectWebSocket();
+        }, 5000);
+      };
+
+      ws.onerror = () => {
+        setWsStatus('disconnected');
+        addMessage('error', 'WebSocket connection error');
+      };
+
+    } catch (err) {
+      setWsStatus('disconnected');
+      addMessage('error', `Failed to connect: ${(err as Error).message}`);
+    }
+  }, [addMessage]);
 
   // Restart terminal-server-5400
   const restartServer5400 = async () => {
     if (isRestarting) return;
 
     setIsRestarting(true);
-    addActivity('restart', 'Restarting terminal-server-5400...', 'Please wait');
+    addMessage('system', 'Restarting terminal-server-5400...');
+
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
 
     try {
       const res = await fetch('/terminal/api/restart', { method: 'POST' });
       const data = await res.json();
 
       if (data.success) {
-        addActivity('system', 'Terminal server restarted successfully', `PID: ${data.pid || 'pending'}`);
-        // Wait a moment then check status
+        addMessage('system', `Server restarted successfully. PID: ${data.pid || 'pending'}`);
+        // Wait then reconnect
         setTimeout(() => {
-          checkServer5400();
+          checkServerStatus();
+          connectWebSocket();
           setIsRestarting(false);
         }, 3000);
       } else {
-        addActivity('error', 'Restart failed', data.error || 'Unknown error');
+        addMessage('error', `Restart failed: ${data.error || 'Unknown error'}`);
         setIsRestarting(false);
       }
     } catch (err) {
-      addActivity('error', 'Restart request failed', (err as Error).message);
+      addMessage('error', `Restart request failed: ${(err as Error).message}`);
       setIsRestarting(false);
     }
   };
 
-  // Heartbeat pulse
-  const pulse = useCallback(async () => {
-    try {
-      const now = new Date();
-      const serverOnline = await checkServer5400();
-      const uptimeSeconds = Math.floor((now.getTime() - (lastPulse?.getTime() || now.getTime())) / 1000) + pulseCount * 30;
-
-      setHeartbeat({
-        timestamp: now.toISOString(),
-        status: serverOnline ? 'alive' : 'offline',
-        uptime: uptimeSeconds,
-        lastActivity: serverOnline ? 'Monitoring active' : 'Server offline',
-        sessionsToday: serverOnline ? Math.floor(Math.random() * 10) + 5 : 0,
-        itemsExtracted: serverOnline ? Math.floor(Math.random() * 50) + 20 : 0
-      });
-
-      setPulseCount(prev => prev + 1);
-      setLastPulse(now);
-      setIsConnected(serverOnline);
-
-      // Add heartbeat activity every 10 pulses
-      if (pulseCount % 10 === 0 && pulseCount > 0) {
-        addActivity('heartbeat', `Heartbeat #${pulseCount}`, `5400: ${serverOnline ? 'Online' : 'Offline'}`);
-      }
-    } catch (err) {
-      setIsConnected(false);
-      addActivity('error', 'Heartbeat failed', (err as Error).message);
-    }
-  }, [pulseCount, lastPulse, addActivity, checkServer5400]);
-
-  // Start heartbeat on mount
+  // Initialize on mount
   useEffect(() => {
-    pulse();
-    addActivity('system', 'Terminal initialized', 'Claude internal monitor started');
+    // Check server status
+    checkServerStatus();
 
-    // Set up 30 second heartbeat
-    heartbeatRef.current = setInterval(pulse, 30000);
+    // Connect to WebSocket
+    connectWebSocket();
+
+    // Poll server status every 30 seconds
+    statusIntervalRef.current = setInterval(checkServerStatus, 30000);
 
     return () => {
-      if (heartbeatRef.current) {
-        clearInterval(heartbeatRef.current);
-      }
+      if (wsRef.current) wsRef.current.close();
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      if (statusIntervalRef.current) clearInterval(statusIntervalRef.current);
     };
   }, []);
 
-  // Auto-scroll activity feed
+  // Auto-scroll messages
   useEffect(() => {
-    if (activityRef.current) {
-      activityRef.current.scrollTop = 0;
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = 0;
     }
-  }, [activities]);
+  }, [messages]);
 
-  const getActivityIcon = (type: ActivityItem['type']) => {
+  const getMessageIcon = (type: TerminalMessage['type']) => {
     switch (type) {
-      case 'heartbeat': return <Heart className="w-4 h-4 text-red-400" />;
-      case 'session': return <MessageSquare className="w-4 h-4 text-blue-400" />;
-      case 'extraction': return <Zap className="w-4 h-4 text-yellow-400" />;
+      case 'claude': return <MessageSquare className="w-4 h-4 text-blue-400" />;
+      case 'user': return <Cpu className="w-4 h-4 text-green-400" />;
+      case 'tool': return <Zap className="w-4 h-4 text-yellow-400" />;
       case 'error': return <AlertTriangle className="w-4 h-4 text-red-500" />;
-      case 'system': return <Cpu className="w-4 h-4 text-emerald-400" />;
-      case 'restart': return <Power className="w-4 h-4 text-orange-400" />;
+      case 'system': return <TerminalIcon className="w-4 h-4 text-gray-400" />;
       default: return <Activity className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  const getMessageColor = (type: TerminalMessage['type']) => {
+    switch (type) {
+      case 'claude': return 'text-blue-300';
+      case 'user': return 'text-green-300';
+      case 'tool': return 'text-yellow-300';
+      case 'error': return 'text-red-400';
+      case 'system': return 'text-gray-400';
+      default: return 'text-gray-300';
     }
   };
 
@@ -191,28 +236,38 @@ export default function TerminalPage() {
             <TerminalIcon className={`w-8 h-8 ${isConnected ? 'text-emerald-400' : 'text-red-400'}`} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Claude Internal Terminal</h1>
-            <p className="text-gray-400 text-sm">Live monitoring and heartbeat system - Port 5400</p>
+            <h1 className="text-2xl font-bold text-white">Claude Terminal Feed</h1>
+            <p className="text-gray-400 text-sm">Live output from terminal-server-5400</p>
           </div>
         </div>
 
-        {/* Connection Status & Restart Button */}
+        {/* Connection Status & Controls */}
         <div className="flex items-center gap-3">
+          {/* WebSocket Status */}
           <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-            isConnected ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-red-500/20 border border-red-500/30'
+            wsStatus === 'connected' ? 'bg-emerald-500/20 border border-emerald-500/30' :
+            wsStatus === 'connecting' ? 'bg-yellow-500/20 border border-yellow-500/30' :
+            'bg-red-500/20 border border-red-500/30'
           }`}>
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-            <span className={isConnected ? 'text-emerald-400' : 'text-red-400'}>
-              {isConnected ? 'Connected' : 'Disconnected'}
+            {wsStatus === 'connected' ? <Wifi className="w-4 h-4 text-emerald-400" /> :
+             wsStatus === 'connecting' ? <RefreshCw className="w-4 h-4 text-yellow-400 animate-spin" /> :
+             <WifiOff className="w-4 h-4 text-red-400" />}
+            <span className={
+              wsStatus === 'connected' ? 'text-emerald-400' :
+              wsStatus === 'connecting' ? 'text-yellow-400' : 'text-red-400'
+            }>
+              {wsStatus === 'connected' ? 'Live' : wsStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
             </span>
           </div>
+
           <button
-            onClick={pulse}
+            onClick={connectWebSocket}
             className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors"
-            title="Force pulse"
+            title="Reconnect"
           >
             <RefreshCw className="w-5 h-5" />
           </button>
+
           <button
             onClick={restartServer5400}
             disabled={isRestarting}
@@ -221,7 +276,6 @@ export default function TerminalPage() {
                 ? 'bg-orange-600/50 text-orange-300 cursor-wait'
                 : 'bg-orange-600 hover:bg-orange-700 text-white'
             }`}
-            title="Restart terminal-server-5400"
           >
             <Power className={`w-4 h-4 ${isRestarting ? 'animate-spin' : ''}`} />
             {isRestarting ? 'Restarting...' : 'Restart 5400'}
@@ -231,7 +285,7 @@ export default function TerminalPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-5 gap-4 mb-6">
-        {/* Server 5400 Status */}
+        {/* Server Status */}
         <div className={`bg-gray-800 rounded-xl p-4 border ${server5400Status.online ? 'border-emerald-500/50' : 'border-red-500/50'}`}>
           <div className="flex items-center justify-between mb-3">
             <Power className={`w-6 h-6 ${server5400Status.online ? 'text-emerald-400' : 'text-red-400'}`} />
@@ -245,14 +299,16 @@ export default function TerminalPage() {
           </div>
         </div>
 
-        {/* Heartbeat */}
+        {/* WebSocket */}
         <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
           <div className="flex items-center justify-between mb-3">
-            <Heart className={`w-6 h-6 ${isConnected ? 'text-red-400 animate-pulse' : 'text-gray-600'}`} />
-            <span className="text-xs text-gray-500">HEARTBEAT</span>
+            {isConnected ? <Wifi className="w-6 h-6 text-emerald-400" /> : <WifiOff className="w-6 h-6 text-gray-600" />}
+            <span className="text-xs text-gray-500">WEBSOCKET</span>
           </div>
-          <div className="text-3xl font-bold text-white mb-1">{pulseCount}</div>
-          <div className="text-sm text-gray-400">pulses</div>
+          <div className={`text-xl font-bold mb-1 ${isConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </div>
+          <div className="text-sm text-gray-400">:5400</div>
         </div>
 
         {/* Uptime */}
@@ -267,177 +323,74 @@ export default function TerminalPage() {
           <div className="text-sm text-gray-400">server time</div>
         </div>
 
-        {/* Sessions Today */}
+        {/* Messages */}
         <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
           <div className="flex items-center justify-between mb-3">
             <MessageSquare className="w-6 h-6 text-purple-400" />
-            <span className="text-xs text-gray-500">SESSIONS</span>
+            <span className="text-xs text-gray-500">MESSAGES</span>
           </div>
-          <div className="text-3xl font-bold text-white mb-1">
-            {heartbeat?.sessionsToday || 0}
-          </div>
-          <div className="text-sm text-gray-400">today</div>
+          <div className="text-3xl font-bold text-white mb-1">{messageCount}</div>
+          <div className="text-sm text-gray-400">received</div>
         </div>
 
-        {/* Restarts */}
+        {/* Memory */}
         <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
           <div className="flex items-center justify-between mb-3">
-            <RefreshCw className="w-6 h-6 text-orange-400" />
-            <span className="text-xs text-gray-500">RESTARTS</span>
+            <Cpu className="w-6 h-6 text-cyan-400" />
+            <span className="text-xs text-gray-500">MEMORY</span>
           </div>
           <div className="text-3xl font-bold text-white mb-1">
-            {server5400Status.restarts || 0}
+            {server5400Status.memory || '--'}
           </div>
-          <div className="text-sm text-gray-400">total</div>
+          <div className="text-sm text-gray-400">usage</div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Activity Feed */}
-        <div className="col-span-2 bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-emerald-400" />
-              <h2 className="font-semibold text-white">Activity Feed</h2>
-            </div>
-            <span className="text-xs text-gray-500">{activities.length} events</span>
+      {/* Terminal Feed */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between bg-gray-900/50">
+          <div className="flex items-center gap-2">
+            <Activity className={`w-5 h-5 ${isConnected ? 'text-emerald-400' : 'text-gray-500'}`} />
+            <h2 className="font-semibold text-white">Live Terminal Output</h2>
+            {isConnected && <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />}
           </div>
-
-          <div
-            ref={activityRef}
-            className="h-[500px] overflow-y-auto p-4 space-y-2"
-          >
-            {activities.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>Waiting for activity...</p>
-              </div>
-            ) : (
-              activities.map(activity => (
-                <div
-                  key={activity.id}
-                  className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg hover:bg-gray-900 transition-colors"
-                >
-                  <div className="mt-0.5">{getActivityIcon(activity.type)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-white">{activity.message}</span>
-                      <span className="text-xs text-gray-500 flex-shrink-0">
-                        {formatTime(activity.timestamp)}
-                      </span>
-                    </div>
-                    {activity.details && (
-                      <p className="text-xs text-gray-400 mt-1">{activity.details}</p>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500">{messages.length} messages</span>
+            <button
+              onClick={() => setMessages([])}
+              className="text-xs text-gray-500 hover:text-white"
+            >
+              Clear
+            </button>
           </div>
         </div>
 
-        {/* Status Panel */}
-        <div className="space-y-4">
-          {/* Server 5400 Details */}
-          <div className={`bg-gray-800 rounded-xl border p-4 ${server5400Status.online ? 'border-emerald-500/30' : 'border-red-500/30'}`}>
-            <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-              <TerminalIcon className="w-5 h-5 text-emerald-400" />
-              Terminal Server 5400
-            </h3>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-sm">Status</span>
-                <span className={`text-sm font-medium ${server5400Status.online ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {server5400Status.online ? 'Running' : 'Stopped'}
+        <div
+          ref={messagesRef}
+          className="h-[600px] overflow-y-auto p-4 space-y-1 font-mono text-sm bg-gray-950"
+        >
+          {messages.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <TerminalIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>Waiting for terminal output...</p>
+              <p className="text-xs mt-2">Messages from Claude will appear here</p>
+            </div>
+          ) : (
+            messages.map(msg => (
+              <div
+                key={msg.id}
+                className="flex items-start gap-2 py-1 hover:bg-gray-900/50 px-2 rounded"
+              >
+                <span className="text-gray-600 text-xs flex-shrink-0 w-20">
+                  {formatTime(msg.timestamp)}
+                </span>
+                <div className="flex-shrink-0 mt-0.5">{getMessageIcon(msg.type)}</div>
+                <span className={`flex-1 break-all ${getMessageColor(msg.type)}`}>
+                  {msg.content}
                 </span>
               </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-sm">PID</span>
-                <span className="text-sm text-white">{server5400Status.pid || '--'}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-sm">Memory</span>
-                <span className="text-sm text-white">{server5400Status.memory || '--'}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-sm">Uptime</span>
-                <span className="text-sm text-white">{server5400Status.uptime || '--'}</span>
-              </div>
-
-              <div className="pt-3 border-t border-gray-700">
-                <button
-                  onClick={restartServer5400}
-                  disabled={isRestarting}
-                  className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isRestarting
-                      ? 'bg-orange-600/50 text-orange-300 cursor-wait'
-                      : server5400Status.online
-                        ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                  }`}
-                >
-                  <Power className={`w-4 h-4 ${isRestarting ? 'animate-spin' : ''}`} />
-                  {isRestarting ? 'Restarting...' : server5400Status.online ? 'Restart Server' : 'Start Server'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <h3 className="font-semibold text-white mb-4">Quick Actions</h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  checkServer5400();
-                  addActivity('system', 'Manual status check', 'Checking terminal-server-5400');
-                }}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
-              >
-                Check Status
-              </button>
-              <button
-                onClick={() => addActivity('extraction', 'Extraction triggered', 'Manual extraction request')}
-                className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors"
-              >
-                Trigger Extraction
-              </button>
-              <button
-                onClick={() => setActivities([])}
-                className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition-colors"
-              >
-                Clear Feed
-              </button>
-            </div>
-          </div>
-
-          {/* Connection Info */}
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <h3 className="font-semibold text-white mb-3">Connections</h3>
-            <div className="text-xs font-mono space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Terminal</span>
-                <span className={server5400Status.online ? 'text-emerald-400' : 'text-red-400'}>:5400</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Susan</span>
-                <span className="text-blue-400">:5403</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Jen</span>
-                <span className="text-purple-400">:5402</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Chad</span>
-                <span className="text-yellow-400">:5401</span>
-              </div>
-            </div>
-          </div>
+            ))
+          )}
         </div>
       </div>
     </div>
