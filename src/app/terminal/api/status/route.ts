@@ -1,63 +1,44 @@
 import { NextResponse } from 'next/server';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export async function GET() {
   try {
-    // Call PM2 to get terminal-server-5400 status
-    const response = await fetch('http://localhost:5400/health', {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000)
-    }).catch(() => null);
+    // Get PM2 status directly - this is the source of truth
+    const { stdout } = await execAsync('pm2 jlist');
+    const processes = JSON.parse(stdout);
+    const terminalServer = processes.find((p: any) => p.name === 'terminal-server-5400');
 
-    if (response && response.ok) {
-      // Server is responding, get PM2 details
-      const pm2Status = await getPM2Status();
+    if (terminalServer) {
+      const isOnline = terminalServer.pm2_env?.status === 'online';
+      const uptimeMs = terminalServer.pm2_env?.pm_uptime || 0;
+      const uptimeSeconds = isOnline ? Math.floor((Date.now() - uptimeMs) / 1000) : 0;
+
       return NextResponse.json({
-        online: true,
-        ...pm2Status
+        online: isOnline,
+        pid: terminalServer.pid || null,
+        uptime: isOnline ? formatUptime(uptimeSeconds) : null,
+        memory: formatMemory(terminalServer.monit?.memory || 0),
+        restarts: terminalServer.pm2_env?.restart_time || 0,
+        status: terminalServer.pm2_env?.status
       });
     }
 
-    // Server not responding, check PM2
-    const pm2Status = await getPM2Status();
     return NextResponse.json({
       online: false,
-      ...pm2Status
+      pid: null,
+      uptime: null,
+      memory: null,
+      restarts: 0,
+      status: 'not found'
     });
   } catch (error) {
     return NextResponse.json({
       online: false,
       error: (error as Error).message
     });
-  }
-}
-
-async function getPM2Status() {
-  try {
-    // Use SSH to get PM2 status (runs on server)
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    const { stdout } = await execAsync('pm2 jlist');
-    const processes = JSON.parse(stdout);
-    const terminalServer = processes.find((p: any) => p.name === 'terminal-server-5400');
-
-    if (terminalServer) {
-      const uptimeMs = terminalServer.pm2_env?.pm_uptime || 0;
-      const uptimeSeconds = Math.floor((Date.now() - uptimeMs) / 1000);
-
-      return {
-        pid: terminalServer.pid,
-        uptime: formatUptime(uptimeSeconds),
-        memory: formatMemory(terminalServer.monit?.memory || 0),
-        restarts: terminalServer.pm2_env?.restart_time || 0,
-        status: terminalServer.pm2_env?.status
-      };
-    }
-
-    return { pid: null, uptime: null, memory: null, restarts: 0 };
-  } catch (err) {
-    return { pid: null, uptime: null, memory: null, restarts: 0 };
   }
 }
 
