@@ -18,7 +18,7 @@ interface BugReport {
   title: string;
   description?: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'investigating' | 'fixed' | 'wont_fix' | 'duplicate';
+  status: 'open' | 'closed';
   steps_to_reproduce?: string;
   expected_behavior?: string;
   actual_behavior?: string;
@@ -48,10 +48,7 @@ const SEVERITY_CONFIG = {
 
 const STATUS_CONFIG = {
   open: { label: 'Open', color: 'bg-red-600/20 text-red-400', icon: AlertTriangle },
-  investigating: { label: 'Investigating', color: 'bg-yellow-600/20 text-yellow-400', icon: Search },
-  fixed: { label: 'Fixed', color: 'bg-green-600/20 text-green-400', icon: CheckCircle },
-  wont_fix: { label: "Won't Fix", color: 'bg-gray-600/20 text-gray-500', icon: X },
-  duplicate: { label: 'Duplicate', color: 'bg-purple-600/20 text-purple-400', icon: Bug },
+  closed: { label: 'Closed', color: 'bg-green-600/20 text-green-400', icon: CheckCircle },
 };
 
 export default function BugsTab({ projectPath, projectId, projectName, isParent, childProjectIds }: BugsTabProps) {
@@ -191,7 +188,7 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
         body: JSON.stringify({
           ...formData,
           reported_by: formData.title ? 'manual' : undefined,
-          resolved_at: formData.status === 'fixed' ? new Date().toISOString() : null,
+          resolved_at: formData.status === 'closed' ? new Date().toISOString() : null,
         }),
       });
       resetForm();
@@ -208,7 +205,7 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
-          resolved_at: newStatus === 'fixed' ? new Date().toISOString() : null,
+          resolved_at: newStatus === 'closed' ? new Date().toISOString() : null,
         }),
       });
       fetchBugs();
@@ -269,15 +266,15 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
 
   const filteredBugs = bugs.filter(bug => {
     if (filter === 'all') return true;
-    if (filter === 'open') return ['open', 'investigating'].includes(bug.status);
-    if (filter === 'closed') return ['fixed', 'wont_fix', 'duplicate'].includes(bug.status);
+    if (filter === 'open') return bug.status === 'open';
+    if (filter === 'closed') return bug.status === 'closed';
     return true;
   });
 
   const counts = {
     all: bugs.length,
-    open: bugs.filter(b => ['open', 'investigating'].includes(b.status)).length,
-    closed: bugs.filter(b => ['fixed', 'wont_fix', 'duplicate'].includes(b.status)).length,
+    open: bugs.filter(b => b.status === 'open').length,
+    closed: bugs.filter(b => b.status === 'closed').length,
   };
 
   return (
@@ -494,16 +491,16 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            {bug.status !== 'fixed' && (
+                            {bug.status !== 'closed' && (
                               <button
-                                onClick={() => handleStatusChange(bug, 'fixed')}
+                                onClick={() => handleStatusChange(bug, 'closed')}
                                 className="p-1.5 text-gray-500 hover:text-green-400 hover:bg-gray-700 rounded"
-                                title="Mark fixed"
+                                title="Mark closed"
                               >
                                 <CheckCircle className="w-4 h-4" />
                               </button>
                             )}
-                            {bug.status === 'fixed' && (
+                            {bug.status === 'closed' && (
                               <button
                                 onClick={() => handleArchive(bug)}
                                 className="p-1.5 text-gray-500 hover:text-purple-400 hover:bg-gray-700 rounded"
