@@ -24,9 +24,11 @@ const JEN_BUCKETS = [
 ];
 
 interface TeamStatus {
-  captured: number;
-  flagged: number;
-  filed: number;
+  active: number;      // Chad: active sessions
+  processed: number;   // Jen: processed (structure extracted)
+  extracted: number;   // Claude: semantic extraction done
+  cleaned: number;     // Susan: cleaned
+  archived: number;    // Susan: archived
 }
 
 interface Session {
@@ -48,13 +50,15 @@ interface BucketCounts {
 
 interface DatabaseStats {
   total_sessions: number;
+  // 5-stage session lifecycle
   active: number;
-  captured: number;
-  scrubbed: number;
-  flagged: number;
-  pending: number;
+  processed: number;
+  extracted: number;
   cleaned: number;
   archived: number;
+  // Item counts
+  flagged: number;
+  pending: number;
   last_24h: number;
   last_session: string | null;
 }
@@ -236,7 +240,7 @@ export default function SessionLogsPage() {
         setProjects(parentProjects);
       }
 
-      // Fetch each team's stats
+      // Fetch each team's 5-stage stats
       const teamPromises = TEAMS.map(async (team) => {
         try {
           const res = await fetch(`/session-logs/api/sessions/buckets?workspace=${team.workspace}`, { cache: 'no-store' });
@@ -246,14 +250,16 @@ export default function SessionLogsPage() {
             return {
               id: team.id,
               status: {
-                captured: Number(s.active || 0) + Number(s.captured || 0),
-                flagged: Number(s.flagged || 0),
-                filed: Number(s.pending || 0) + Number(s.cleaned || 0) + Number(s.archived || 0),
+                active: Number(s.active || 0),
+                processed: Number(s.processed || 0),
+                extracted: Number(s.extracted || 0),
+                cleaned: Number(s.cleaned || 0),
+                archived: Number(s.archived || 0),
               }
             };
           }
         } catch {}
-        return { id: team.id, status: { captured: 0, flagged: 0, filed: 0 } };
+        return { id: team.id, status: { active: 0, processed: 0, extracted: 0, cleaned: 0, archived: 0 } };
       });
 
       const teamResults = await Promise.all(teamPromises);
@@ -341,18 +347,21 @@ export default function SessionLogsPage() {
     return () => clearInterval(interval);
   }, [refreshAll]);
 
-  // Pipeline totals from database stats
-  // Flow: active → captured → flagged → pending → cleaned → archived
-  const totals = {
+  // 5-stage session lifecycle: active → processed → extracted → cleaned → archived
+  const sessionTotals = {
     active: Number(stats?.active || buckets['active'] || 0),
-    processed: Number(stats?.scrubbed || buckets["processed"] || buckets["pending_review"] || 0),
-    flagged: Number(stats?.flagged || buckets['flagged'] || 0),
-    pending: Number(stats?.pending || buckets["pending"] || 0),
-    published: Number(buckets["published"] || buckets["cataloged"] || 0),
+    processed: Number(stats?.processed || buckets['processed'] || 0),
+    extracted: Number(stats?.extracted || buckets['extracted'] || 0),
     cleaned: Number(stats?.cleaned || buckets['cleaned'] || 0),
     archived: Number(stats?.archived || buckets['archived'] || 0),
-    total: Number(stats?.total_sessions || Object.values(buckets).reduce((sum, c) => sum + Number(c), 0)),
+    total: Number(stats?.total_sessions || 0),
     last24h: Number(stats?.last_24h || 0),
+  };
+
+  // Item counts (pending review by Susan, published by Clair)
+  const itemCounts = {
+    pending: Number(stats?.pending || buckets['pending'] || 0),
+    published: Number(buckets['published'] || 0),
   };
 
   const overallHealth = error ? 'down' : 'healthy';
@@ -390,28 +399,36 @@ export default function SessionLogsPage() {
         </div>
       )}
 
-      {/* Team Summary Cards */}
+      {/* Team Summary Cards - 5-stage flow */}
       <div className="p-4 bg-gray-850 border-b border-gray-700 shrink-0">
         <div className="grid grid-cols-4 gap-4">
           {TEAMS.map(team => {
-            const status = teamStatuses[team.id] || { captured: 0, flagged: 0, filed: 0 };
+            const status = teamStatuses[team.id] || { active: 0, processed: 0, extracted: 0, cleaned: 0, archived: 0 };
             return (
               <div key={team.id} className="p-3 rounded-lg border border-gray-700 bg-gray-800/50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-white">{team.name}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-5 gap-1 text-center">
                   <div>
-                    <div className="text-lg font-bold text-blue-400">{status.captured}</div>
-                    <div className="text-[10px] text-gray-500">Captured</div>
+                    <div className="text-sm font-bold text-cyan-400">{status.active}</div>
+                    <div className="text-[9px] text-gray-500">Active</div>
                   </div>
                   <div>
-                    <div className="text-lg font-bold text-purple-400">{status.flagged}</div>
-                    <div className="text-[10px] text-gray-500">Flagged</div>
+                    <div className="text-sm font-bold text-blue-400">{status.processed}</div>
+                    <div className="text-[9px] text-gray-500">Proc</div>
                   </div>
                   <div>
-                    <div className="text-lg font-bold text-green-400">{status.filed}</div>
-                    <div className="text-[10px] text-gray-500">Filed</div>
+                    <div className="text-sm font-bold text-purple-400">{status.extracted}</div>
+                    <div className="text-[9px] text-gray-500">Extr</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-teal-400">{status.cleaned}</div>
+                    <div className="text-[9px] text-gray-500">Clean</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-green-400">{status.archived}</div>
+                    <div className="text-[9px] text-gray-500">Arch</div>
                   </div>
                 </div>
               </div>
@@ -420,38 +437,21 @@ export default function SessionLogsPage() {
         </div>
       </div>
 
-      {/* Pipeline Header Row: 3/4 header | 1/4 pipeline buckets */}
-      <div className="flex border-b border-gray-700 shrink-0">
-        {/* 3/4 Pipeline Header */}
-        <div className="flex-[3] px-4 py-3 bg-gray-800/50 border-r border-gray-700">
-          <div className="flex items-center justify-around">
-            <TotalStat label="Active" value={totals.active} color="cyan" />
-            <PipelineArrow />
-            <TotalStat label="Processed" value={totals.processed} color="blue" />
-            <PipelineArrow />
-            <TotalStat label="Extracted" value={totals.flagged} color="purple" />
-            <PipelineArrow />
-            <TotalStat label="Pending" value={totals.pending} color="yellow" />
-            <PipelineArrow />
-            <TotalStat label="Cleaned" value={totals.cleaned} color="teal" />
-            <PipelineArrow />
-            <TotalStat label="Archived" value={totals.archived} color="green" />
-          </div>
-          <div className="text-center mt-2 text-xs text-gray-500">
-            {totals.total} total sessions | {totals.last24h} in last 24h
-          </div>
+      {/* 5-Stage Session Pipeline: active → processed → extracted → cleaned → archived */}
+      <div className="border-b border-gray-700 shrink-0 px-4 py-3 bg-gray-800/50">
+        <div className="flex items-center justify-around">
+          <SessionStage label="Active" value={sessionTotals.active} color="cyan" owner="Chad" />
+          <PipelineArrow />
+          <SessionStage label="Processed" value={sessionTotals.processed} color="blue" owner="Jen" />
+          <PipelineArrow />
+          <SessionStage label="Extracted" value={sessionTotals.extracted} color="purple" owner="Claude" />
+          <PipelineArrow />
+          <SessionStage label="Cleaned" value={sessionTotals.cleaned} color="teal" owner="Susan" />
+          <PipelineArrow />
+          <SessionStage label="Archived" value={sessionTotals.archived} color="green" owner="Susan" />
         </div>
-
-        {/* 1/4 Pipeline Buckets (compact) */}
-        <div className="flex-1 px-3 py-2 bg-gray-800/50">
-          <div className="space-y-0.5">
-            {['active', 'processed', 'cleaned', 'archived'].map(name => (
-              <div key={name} className="flex items-center justify-between text-xs">
-                <span className="text-gray-400 capitalize">{name}</span>
-                <span className="font-mono font-bold text-white">{buckets[name] || 0}</span>
-              </div>
-            ))}
-          </div>
+        <div className="text-center mt-2 text-xs text-gray-500">
+          {sessionTotals.total} total sessions | {sessionTotals.last24h} in last 24h
         </div>
       </div>
 
@@ -570,8 +570,8 @@ function PipelineArrow() {
   return <span className="text-gray-600 text-xs">→</span>;
 }
 
-// Total stat display
-function TotalStat({ label, value, color }: { label: string; value: number; color: string }) {
+// Session stage display with owner label
+function SessionStage({ label, value, color, owner }: { label: string; value: number; color: string; owner: string }) {
   const colors: Record<string, string> = {
     cyan: 'text-cyan-400',
     blue: 'text-blue-400',
@@ -582,10 +582,19 @@ function TotalStat({ label, value, color }: { label: string; value: number; colo
     green: 'text-green-400',
   };
 
+  const bgColors: Record<string, string> = {
+    cyan: 'bg-cyan-900/30',
+    blue: 'bg-blue-900/30',
+    purple: 'bg-purple-900/30',
+    teal: 'bg-teal-900/30',
+    green: 'bg-green-900/30',
+  };
+
   return (
-    <div className="text-center">
-      <div className={`text-xl font-bold ${colors[color] || 'text-gray-400'}`}>{value}</div>
-      <div className="text-[10px] text-gray-500">{label}</div>
+    <div className={`text-center px-4 py-2 rounded-lg ${bgColors[color] || ''}`}>
+      <div className={`text-2xl font-bold ${colors[color] || 'text-gray-400'}`}>{value}</div>
+      <div className="text-xs text-white font-medium">{label}</div>
+      <div className="text-[10px] text-gray-500">{owner}</div>
     </div>
   );
 }
@@ -628,13 +637,11 @@ function SessionItem({ session }: { session: Session }) {
 
   const user = getDisplayName();
 
-  // Pipeline: active → captured → flagged → pending → cleaned → archived
+  // 5-stage session lifecycle: active → processed → extracted → cleaned → archived
   const statusColors: Record<string, string> = {
     active: 'bg-cyan-900/50 text-cyan-400',
-    processed: "bg-blue-900/50 text-blue-400",
-    published: "bg-indigo-900/50 text-indigo-400",
-    flagged: 'bg-purple-900/50 text-purple-400',
-    pending: 'bg-yellow-900/50 text-yellow-400',
+    processed: 'bg-blue-900/50 text-blue-400',
+    extracted: 'bg-purple-900/50 text-purple-400',
     cleaned: 'bg-teal-900/50 text-teal-400',
     archived: 'bg-gray-900/50 text-gray-400',
   };
@@ -729,15 +736,12 @@ function ClairProjectRow({
   );
 }
 
-// Bucket row
-// Pipeline: active → captured → flagged → pending → cleaned → archived
+// Bucket row for extraction categories
 function BucketRow({ name, count }: { name: string; count: number }) {
   const bucketColors: Record<string, string> = {
     active: 'bg-cyan-900/20',
-    processed: "bg-blue-900/20",
-    published: "bg-indigo-900/20",
-    flagged: 'bg-purple-900/20',
-    pending: 'bg-yellow-900/20',
+    processed: 'bg-blue-900/20',
+    extracted: 'bg-purple-900/20',
     cleaned: 'bg-teal-900/20',
     archived: 'bg-gray-800/30',
   };

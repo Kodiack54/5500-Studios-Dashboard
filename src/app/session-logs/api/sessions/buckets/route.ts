@@ -29,12 +29,16 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const day = 24 * 60 * 60 * 1000;
     
-    let activeSessions = 0, processedSessions = 0, last24h = 0;
+    // 5-stage session lifecycle: active → processed → extracted → cleaned → archived
+    let activeSessions = 0, processedSessions = 0, extractedSessions = 0, cleanedSessions = 0, archivedSessions = 0, last24h = 0;
     for (const s of sessionList) {
       const status = (s as Record<string, unknown>).status as string;
       const startedAt = (s as Record<string, unknown>).started_at as string;
       if (status === "active") activeSessions++;
-      if (status === "processed") processedSessions++;
+      else if (status === "processed") processedSessions++;
+      else if (status === "extracted") extractedSessions++;
+      else if (status === "cleaned") cleanedSessions++;
+      else if (status === "archived") archivedSessions++;
       if (startedAt) {
         const startTime = new Date(startedAt).getTime();
         if (now.getTime() - startTime < day) last24h++;
@@ -58,9 +62,23 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      // Session lifecycle: active → processed → extracted → cleaned → archived
+      sessions: {
+        active: activeSessions,
+        processed: processedSessions,
+        extracted: extractedSessions,
+        cleaned: cleanedSessions,
+        archived: archivedSessions,
+        total: sessionList.length,
+        last_24h: last24h,
+      },
+      // Item counts (for backward compat, kept as buckets)
       buckets: {
         active: activeSessions,
         processed: processedSessions,
+        extracted: extractedSessions,
+        cleaned: cleanedSessions,
+        archived: archivedSessions,
         flagged: totalFlagged,
         pending: totalPending,
         published: totalFinal,
@@ -69,10 +87,11 @@ export async function GET(request: NextRequest) {
         total_sessions: sessionList.length,
         active: activeSessions,
         processed: processedSessions,
+        extracted: extractedSessions,
+        cleaned: cleanedSessions,
+        archived: archivedSessions,
         flagged: totalFlagged,
         pending: totalPending,
-        cleaned: totalFinal,
-        archived: 0,
         last_24h: last24h,
         last_session: sessionList.length > 0 ? (sessionList[0] as Record<string, unknown>).started_at : null,
       },
