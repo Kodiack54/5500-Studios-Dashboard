@@ -363,24 +363,30 @@ export default function ProjectManagementPanel({ onProjectsChange }: ProjectMana
     if (!selectedProject) return null;
     const projectPath = selectedProject.server_path || '';
 
+    // Determine if this is a parent project and get child IDs
+    const isParent = selectedProject.is_parent === true;
+    const childProjectIds = isParent
+      ? allProjects.filter(p => p.parent_id === selectedProject.id).map(p => p.id)
+      : [];
+
     switch (activeTab) {
       case 'todos':
-        return <TodosTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <TodosTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'knowledge':
-        return <KnowledgeTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <KnowledgeTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'docs':
-        return <DocsTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <DocsTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'database':
         return <DatabaseTab projectPath={projectPath} projectId={selectedProject.id} />;
       case 'structure':
-        return <StructureTab projectPath={projectPath} projectId={selectedProject.id} />;
-      
+        return <StructureTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
+
       case 'conventions':
-        return <ConventionsTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <ConventionsTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'notepad':
         return <NotepadTab projectPath={projectPath} projectId={selectedProject.id} />;
       case 'bugs':
-        return <BugsTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <BugsTab projectPath={projectPath} projectId={selectedProject.id} projectName={selectedProject.name} isParent={isParent} childProjectIds={childProjectIds} />;
       default:
         return null;
     }
