@@ -60,7 +60,7 @@ export default function TodosTab({ projectPath, projectId, projectName, isParent
       if (isParent && childProjectIds && childProjectIds.length > 0) {
         // Parent: fetch todos from all children
         const todoPromises = childProjectIds.map(cid =>
-          fetch(`/project-management/api/clair/todos/${cid}`).then(r => r.json())
+          fetch(`/project-management/api/todos?project_id=${cid}`).then(r => r.json())
         );
         const results = await Promise.all(todoPromises);
         results.forEach(r => {
@@ -68,7 +68,7 @@ export default function TodosTab({ projectPath, projectId, projectName, isParent
         });
       } else {
         // Child or orphan: fetch own todos
-        const todosRes = await fetch(`/project-management/api/clair/todos/${projectId}`);
+        const todosRes = await fetch(`/project-management/api/todos?project_id=${projectId}`);
         const todosData = await todosRes.json();
         if (todosData.success) allTodos = todosData.todos || [];
       }
@@ -78,21 +78,19 @@ export default function TodosTab({ projectPath, projectId, projectName, isParent
   };
 
   const handleStatusChange = async (todo: Todo, newStatus: string) => {
-    const cleanPath = projectPath.startsWith('/') ? projectPath.slice(1) : projectPath;
-    await fetch(`/project-management/api/clair/todos/${projectId}/${todo.id}`, {
+    await fetch(`/project-management/api/todos`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify({ id: todo.id, status: newStatus }),
     });
     fetchData();
   };
 
   const handleAssignPhase = async (todoId: string, phaseId: string) => {
-    const cleanPath = projectPath.startsWith('/') ? projectPath.slice(1) : projectPath;
-    await fetch(`/project-management/api/clair/todos/${projectId}/${todoId}`, {
+    await fetch(`/project-management/api/todos`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phase_id: phaseId }),
+      body: JSON.stringify({ id: todoId, phase_id: phaseId }),
     });
     setAssigningTodo(null);
     fetchData();

@@ -92,15 +92,16 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, status: todoStatus, priority } = body;
+    const { id, status: todoStatus, priority, phase_id } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const updates: Record<string, string> = {};
+    const updates: Record<string, unknown> = {};
     if (todoStatus) updates.status = todoStatus;
     if (priority) updates.priority = priority;
+    if (phase_id !== undefined) updates.phase_id = phase_id;
 
     const { data: todo, error } = await db
       .from('dev_ai_todos')
