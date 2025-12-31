@@ -59,7 +59,7 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   const [selectedPath, setSelectedPath] = useState<ProjectPath | null>(null);
   const [bugs, setBugs] = useState<BugReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'open' | 'fixed'>('all');
+  const [filter, setFilter] = useState<'all' | 'open' | 'closed'>('all');
   const [showForm, setShowForm] = useState(false);
   const [editingBug, setEditingBug] = useState<BugReport | null>(null);
   const [formData, setFormData] = useState({
@@ -270,14 +270,14 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
   const filteredBugs = bugs.filter(bug => {
     if (filter === 'all') return true;
     if (filter === 'open') return ['open', 'investigating'].includes(bug.status);
-    if (filter === 'fixed') return bug.status === 'fixed';
+    if (filter === 'closed') return ['fixed', 'wont_fix', 'duplicate'].includes(bug.status);
     return true;
   });
 
   const counts = {
     all: bugs.length,
     open: bugs.filter(b => ['open', 'investigating'].includes(b.status)).length,
-    fixed: bugs.filter(b => b.status === 'fixed').length,
+    closed: bugs.filter(b => ['fixed', 'wont_fix', 'duplicate'].includes(b.status)).length,
   };
 
   return (
@@ -337,7 +337,7 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
                 <Bug className="w-5 h-5 text-red-400" />
                 <h3 className="text-white font-semibold">{projectName || selectedPath?.label || "Project"} Bugs</h3>
                 <div className="flex items-center gap-1 bg-gray-700 rounded-lg p-0.5">
-                  {(['all', 'open', 'fixed'] as const).map(f => (
+                  {(['all', 'open', 'closed'] as const).map(f => (
                     <button
                       key={f}
                       onClick={() => setFilter(f)}
@@ -459,7 +459,7 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
               ) : filteredBugs.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Bug className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p>{filter === 'all' ? 'No bugs reported' : `No ${filter} bugs`}</p>
+                  <p>{filter === 'all' ? 'No bugs reported' : filter === 'open' ? 'No open bugs' : 'No closed bugs'}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
