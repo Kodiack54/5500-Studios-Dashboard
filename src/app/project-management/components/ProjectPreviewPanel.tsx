@@ -67,15 +67,15 @@ export default function ProjectPreviewPanel({
       return;
     }
 
-    const projectPath = project.server_path || '';
+    const projectId = project.id;
 
     const fetchData = async () => {
       try {
         const [docsRes, todosRes, knowledgeRes, bugsRes] = await Promise.all([
-          fetch(`/project-management/api/docs?project_path=${encodeURIComponent(projectPath)}`),
-          fetch(`/project-management/api/todos?project_path=${encodeURIComponent(projectPath)}`),
-          fetch(`/project-management/api/knowledge?project_path=${encodeURIComponent(projectPath)}`),
-          fetch(`/project-management/api/bugs?project_path=${encodeURIComponent(projectPath)}`),
+          fetch(`/project-management/api/project-docs?project_id=${projectId}`),
+          fetch(`/project-management/api/todos?project_id=${projectId}`),
+          fetch(`/project-management/api/project-knowledge?project_id=${projectId}`),
+          fetch(`/project-management/api/conventions?project_id=${projectId}&convention_type=bug`),
         ]);
 
         const [docsData, todosData, knowledgeData, bugsData] = await Promise.all([
@@ -101,9 +101,16 @@ export default function ProjectPreviewPanel({
           setPreviewKnowledge(knowledgeData.knowledge.slice(0, 8));
         }
 
-        if (bugsData.success && bugsData.bugs) {
-          const activeBugs = bugsData.bugs.filter((b: PreviewBug) => b.status !== 'resolved');
-          setPreviewBugs(activeBugs.slice(0, 5));
+        // Bugs come from conventions table with convention_type=bug
+        if (bugsData.success && bugsData.conventions) {
+          const activeBugs = bugsData.conventions.filter((b: any) => b.status !== 'resolved');
+          setPreviewBugs(activeBugs.map((b: any) => ({
+            id: b.id,
+            title: b.name,
+            severity: b.description?.includes('critical') ? 'critical' :
+                     b.description?.includes('high') ? 'high' : 'medium',
+            status: b.status
+          })).slice(0, 5));
         }
 
         // Fetch phases for parent projects
