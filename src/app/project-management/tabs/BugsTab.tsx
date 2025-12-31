@@ -77,11 +77,15 @@ export default function BugsTab({ projectPath, projectId, projectName, isParent,
 
   useEffect(() => {
     fetchProjectPaths();
-  }, [projectId]);
+  }, [projectId, isParent, childProjectIds]);
 
   useEffect(() => {
+    // For parent, wait for childProjectIds to be populated
+    if (isParent && (!childProjectIds || childProjectIds.length === 0)) {
+      return;
+    }
     fetchBugs();
-  }, [projectId]);
+  }, [projectId, isParent, childProjectIds]);
 
   const fetchProjectPaths = async () => {
     try {
