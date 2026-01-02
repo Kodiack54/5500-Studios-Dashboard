@@ -308,7 +308,9 @@ export function LiveSchemaViewer({ projectId, tablePrefix, isParent }: LiveSchem
   const tableCount = tables.length;
 
   // Only show for parent projects with table_prefix
+  console.log('[LiveSchemaViewer] props:', { projectId, tablePrefix, isParent });
   if (!isParent || !tablePrefix) {
+    console.log('[LiveSchemaViewer] Not rendering - isParent:', isParent, 'tablePrefix:', tablePrefix);
     return null;
   }
 
