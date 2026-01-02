@@ -377,7 +377,7 @@ export default function ProjectManagementPanel({ onProjectsChange }: ProjectMana
       case 'docs':
         return <DocsTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'database':
-        return <DatabaseTab projectPath={projectPath} projectId={selectedProject.id} />;
+        return <DatabaseTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} tablePrefix={selectedProject.table_prefix} />;
       case 'structure':
         return <StructureTab projectPath={projectPath} projectId={selectedProject.id} isParent={isParent} childProjectIds={childProjectIds} />;
 

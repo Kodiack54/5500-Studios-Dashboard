@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Database, Table, Plus, Edit2, Trash2, X, Save, Clock, Search, RefreshCw, Copy, Check, FileText, ChevronDown, ChevronRight, Lightbulb } from 'lucide-react';
+import { LiveSchemaViewer } from '../components/LiveSchemaViewer';
 
 interface DatabaseItem {
   id: string;
@@ -21,6 +22,7 @@ interface DatabaseTabProps {
   projectName?: string;
   isParent?: boolean;
   childProjectIds?: string[];
+  tablePrefix?: string;
 }
 
 type EntryType = 'schema' | 'usage' | 'pattern';
@@ -52,7 +54,7 @@ const getCleanName = (name: string): string => {
   return name.replace(/^(Schema|Usage|Pattern|Table):\s*/i, '').trim();
 };
 
-export default function DatabaseTab({ projectId, projectName, isParent, childProjectIds }: DatabaseTabProps) {
+export default function DatabaseTab({ projectId, projectName, isParent, childProjectIds, tablePrefix }: DatabaseTabProps) {
   const [items, setItems] = useState<DatabaseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -258,6 +260,9 @@ export default function DatabaseTab({ projectId, projectName, isParent, childPro
           />
         </div>
       </div>
+
+      {/* Live Schema from Database */}
+      <LiveSchemaViewer projectId={projectId} tablePrefix={tablePrefix} isParent={isParent} />
 
       {/* Add/Edit Form */}
       {showAddForm && (
