@@ -268,8 +268,8 @@ export function ClaudeTerminal({
 
                   console.log('[ClaudeTerminal] Sending /startproject skill command');
 
-                  // Send /startproject skill command
-                  ws.send(JSON.stringify({ type: 'input', data: '/startproject\r' }));
+                  // Send /startproject command with projectId (intercepted by terminal server)
+                  ws.send(JSON.stringify({ type: 'input', data: `/startproject ${projectId || ''}\r` }));
 
                   // Send extra Enter after 900ms to ensure command executes
                   setTimeout(() => {
