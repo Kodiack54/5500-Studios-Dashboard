@@ -8,9 +8,9 @@
 
 import { useState, useEffect, useContext } from 'react';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
-import { useDeveloper, DEVELOPER_TEAMS } from '@/app/contexts/DeveloperContext';
+import { useDeveloper, DEVELOPER_TEAMS, ParentProject } from '@/app/contexts/DeveloperContext';
 import { useUser, useMinRole } from '@/app/settings/UserContext';
-import { Lock } from 'lucide-react';
+import { Lock, FolderOpen } from 'lucide-react';
 import { DraggableSidebar, SidebarItem } from './components';
 import BrowserPage from './browser/BrowserPage';
 import ClaudeTerminal from './terminal/ClaudeTerminal';
@@ -38,16 +38,17 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
 export default function StudioPage() {
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
-  const { selectedTeam, selectTeamById, connectionStatus, connect, disconnect } = useDeveloper();
+  const { selectedTeam, selectTeamById, connectionStatus, connect, disconnect, selectedProject, setSelectedProject } = useDeveloper();
   const { user } = useUser();
   const isEngineer = useMinRole('engineer');
   const [activePanel, setActivePanel] = useState<string | null>('browser');
 
-  // Project and environment state
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [selectedEnv, setSelectedEnv] = useState<Environment>(ENVIRONMENTS[0]);
+  // Parent projects for session (only top-level projects)
+  const [parentProjects, setParentProjects] = useState<ParentProject[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+
+  // Environment state (for browser preview)
+  const [selectedEnv, setSelectedEnv] = useState<Environment>(ENVIRONMENTS[0]);
 
   // Locked teams state - shows which teams are in use by other users
   const [lockedTeams, setLockedTeams] = useState<Record<string, { userId: string; userName: string; since: string }>>({});
@@ -71,18 +72,23 @@ export default function StudioPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch projects on mount
+  // Fetch parent projects on mount (only top-level, no parent_id)
   useEffect(() => {
-    async function fetchProjects() {
+    async function fetchParentProjects() {
       try {
-        const res = await fetch('/api/projects');
+        const res = await fetch('/api/projects?parents_only=true');
         const data = await res.json();
         if (data.success && data.projects) {
-          setProjects(data.projects);
-          // Auto-select first project
-          if (data.projects.length > 0) {
-            setSelectedProject(data.projects[0]);
-          }
+          // Filter to only parent projects (no parent_id)
+          const parents = data.projects
+            .filter((p: { parent_id?: string }) => !p.parent_id)
+            .map((p: { id: string; name: string; slug: string; server_path?: string }) => ({
+              id: p.id,
+              name: p.name,
+              slug: p.slug,
+              server_path: p.server_path,
+            }));
+          setParentProjects(parents);
         }
       } catch (error) {
         console.error('Failed to fetch projects:', error);
@@ -90,7 +96,7 @@ export default function StudioPage() {
         setIsLoadingProjects(false);
       }
     }
-    fetchProjects();
+    fetchParentProjects();
   }, []);
 
   useEffect(() => {
@@ -99,51 +105,41 @@ export default function StudioPage() {
       description: 'Development environment with Claude AI'
     });
 
-    // Add project/environment selectors as page actions
-    setPageActions(
-      <div className="flex items-center gap-2">
-        {/* Project Dropdown */}
-        <select
-          value={selectedProject?.id || ''}
-          onChange={(e) => {
-            const project = projects.find(p => p.id === e.target.value);
-            setSelectedProject(project || null);
-          }}
-          className="w-44 bg-gray-800/80 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/30"
-          disabled={isLoadingProjects}
-        >
-          {isLoadingProjects ? (
-            <option>Loading...</option>
-          ) : projects.length === 0 ? (
-            <option>No projects</option>
-          ) : (
-            projects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))
-          )}
-        </select>
+    // Only show project/environment in header when connected (locked in)
+    if (connectionStatus === 'connected' && selectedProject) {
+      setPageActions(
+        <div className="flex items-center gap-2">
+          {/* Locked Project Display */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/80 rounded-lg border border-cyan-500/50">
+            <FolderOpen className="w-4 h-4 text-cyan-400" />
+            <span className="text-cyan-400 text-sm font-medium">{selectedProject.name}</span>
+            <Lock className="w-3 h-3 text-cyan-400/60" />
+          </div>
 
-        {/* Environment Dropdown */}
-        <select
-          value={selectedEnv.id}
-          onChange={(e) => {
-            const env = ENVIRONMENTS.find(env => env.id === e.target.value);
-            if (env) setSelectedEnv(env);
-          }}
-          className="w-44 bg-gray-800/80 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/30"
-        >
-          {ENVIRONMENTS.map(env => (
-            <option key={env.id} value={env.id}>{env.name}</option>
-          ))}
-        </select>
-      </div>
-    );
+          {/* Environment Dropdown */}
+          <select
+            value={selectedEnv.id}
+            onChange={(e) => {
+              const env = ENVIRONMENTS.find(env => env.id === e.target.value);
+              if (env) setSelectedEnv(env);
+            }}
+            className="w-44 bg-gray-800/80 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/30"
+          >
+            {ENVIRONMENTS.map(env => (
+              <option key={env.id} value={env.id}>{env.name}</option>
+            ))}
+          </select>
+        </div>
+      );
+    } else {
+      setPageActions(null);
+    }
 
     return () => {
       setPageTitle({ title: '', description: '' });
       setPageActions(null);
     };
-  }, [setPageTitle, setPageActions, projects, selectedProject, selectedEnv, isLoadingProjects]);
+  }, [setPageTitle, setPageActions, connectionStatus, selectedProject, selectedEnv]);
 
   // Show access restricted for non-engineers
   if (!isEngineer) {
@@ -238,10 +234,39 @@ export default function StudioPage() {
                 </div>
               </div>
 
+              {/* Parent Project Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Select Parent Project</label>
+                <div className="relative">
+                  <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <select
+                    value={selectedProject?.id || ''}
+                    onChange={(e) => {
+                      const project = parentProjects.find(p => p.id === e.target.value);
+                      setSelectedProject(project || null);
+                    }}
+                    disabled={isLoadingProjects}
+                    className={`w-full pl-10 pr-4 py-3 rounded-lg border text-left transition-all appearance-none bg-gray-700/50 ${
+                      selectedProject
+                        ? 'border-cyan-500 text-cyan-400'
+                        : 'border-gray-600 text-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-cyan-500/50`}
+                  >
+                    <option value="">-- Select a project --</option>
+                    {parentProjects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {!selectedProject && (
+                  <p className="text-xs text-amber-400/70 mt-1">Required: Select a project before connecting</p>
+                )}
+              </div>
+
               {/* Connect Button */}
               <button
                 onClick={() => user?.id && connect(user.id)}
-                disabled={!user?.id || connectionStatus === 'connecting'}
+                disabled={!user?.id || !selectedProject || connectionStatus === 'connecting'}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {connectionStatus === 'connecting' ? (
@@ -285,7 +310,7 @@ export default function StudioPage() {
         <div className="flex-1 flex flex-col border-r border-gray-700">
           {activePanel === 'browser' ? (
             <BrowserPage
-              project={selectedProject}
+              project={selectedProject as Project | null}
               env={selectedEnv}
             />
           ) : activePanel === 'hub' ? (

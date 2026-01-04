@@ -19,14 +19,23 @@ const KODIACK_AI_TEAM = [
  */
 export async function POST(request: NextRequest) {
   try {
-    const { devSlot, basePort, userId } = await request.json();
+    const { devSlot, basePort, userId, projectId, projectSlug } = await request.json();
 
-    if (!devSlot || !basePort || !userId) {
+    if (!devSlot || !basePort || !userId || !projectId) {
       return NextResponse.json(
-        { error: 'Missing required fields: devSlot, basePort, userId' },
+        { error: 'Missing required fields: devSlot, basePort, userId, projectId' },
         { status: 400 }
       );
     }
+
+    // Get user's pc_tag for Chad to match transcripts
+    const { data: userData } = await db
+      .from('dev_users')
+      .select('pc_tag')
+      .eq('id', userId)
+      .single();
+
+    const pcTag = (userData as { pc_tag?: string } | null)?.pc_tag || null;
 
     // Check if this dev slot is already in use by another user
     const { data: existingSessionData } = await db
@@ -45,7 +54,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create or update session record
+    // End any existing active session for this pc_tag (one session per PC)
+    if (pcTag) {
+      await db
+        .from('dev_sessions')
+        .update({ status: 'ended', ended_at: new Date().toISOString() })
+        .eq('pc_tag', pcTag)
+        .eq('status', 'active');
+    }
+
+    // Create new session record with pc_tag
     const sessionId = crypto.randomUUID();
     const { error: sessionError } = await db
       .from('dev_sessions')
@@ -54,6 +72,8 @@ export async function POST(request: NextRequest) {
         user_id: userId,
         dev_slot: devSlot,
         base_port: basePort,
+        project_id: projectId,
+        pc_tag: pcTag,
         status: 'active',
         started_at: new Date().toISOString(),
       });
@@ -70,15 +90,33 @@ export async function POST(request: NextRequest) {
       status: 'online' as const, // Assume online for now
     }));
 
-    console.log(`[DevSession] User ${userId} connected to ${devSlot} (ports ${basePort}-${basePort + 7})`);
+    console.log(`[DevSession] User ${userId} connected to ${devSlot} on project ${projectSlug} (ports ${basePort}-${basePort + 7}, pc_tag: ${pcTag})`);
+
+    // Notify Chad about the active project for this session
+    // Chad will use this project_id when tagging captured sessions
+    try {
+      const chadPort = basePort + 1; // Chad is at basePort + 1
+      await fetch(`http://161.35.229.220:${chadPort}/api/set-project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, projectSlug }),
+      }).catch(() => {
+        // Chad might not have this endpoint yet - that's ok
+        console.log(`[DevSession] Could not notify Chad at port ${chadPort} about project`);
+      });
+    } catch {
+      // Ignore Chad notification errors
+    }
 
     return NextResponse.json({
       success: true,
       sessionId,
       devSlot,
       basePort,
+      projectId,
+      projectSlug,
       teamStatuses,
-      message: `Connected to ${devSlot} AI team`,
+      message: `Connected to ${devSlot} AI team on project ${projectSlug}`,
     });
 
   } catch (error) {

@@ -42,11 +42,23 @@ export interface TeamMemberStatus {
   status: 'offline' | 'starting' | 'online' | 'error';
 }
 
+// Parent project for session tracking
+export interface ParentProject {
+  id: string;
+  name: string;
+  slug: string;
+  server_path?: string;
+}
+
 interface DeveloperContextValue {
   // Team selection
   selectedTeam: DeveloperTeam;
   setSelectedTeam: (team: DeveloperTeam) => void;
   selectTeamById: (id: string) => void;
+
+  // Project selection (parent projects only)
+  selectedProject: ParentProject | null;
+  setSelectedProject: (project: ParentProject | null) => void;
 
   // Connection state
   connectionStatus: ConnectionStatus;
@@ -63,6 +75,8 @@ const DeveloperContext = createContext<DeveloperContextValue>({
   selectedTeam: DEVELOPER_TEAMS[0],
   setSelectedTeam: () => {},
   selectTeamById: () => {},
+  selectedProject: null,
+  setSelectedProject: () => {},
   connectionStatus: 'disconnected',
   teamStatuses: [],
   lockedUserId: null,
@@ -73,6 +87,7 @@ const DeveloperContext = createContext<DeveloperContextValue>({
 
 export function DeveloperProvider({ children }: { children: ReactNode }) {
   const [selectedTeam, setSelectedTeam] = useState<DeveloperTeam>(DEVELOPER_TEAMS[0]);
+  const [selectedProject, setSelectedProject] = useState<ParentProject | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [teamStatuses, setTeamStatuses] = useState<TeamMemberStatus[]>([]);
   const [lockedUserId, setLockedUserId] = useState<string | null>(null);
@@ -90,6 +105,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
 
   const connect = useCallback(async (userId: string) => {
     if (connectionStatus !== 'disconnected') return;
+    if (!selectedProject) return; // Require project selection
 
     setConnectionStatus('connecting');
     setLockedUserId(userId);
@@ -111,6 +127,8 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
           devSlot: selectedTeam.id,
           basePort: selectedTeam.basePort,
           userId,
+          projectId: selectedProject.id,
+          projectSlug: selectedProject.slug,
         }),
       });
 
@@ -129,7 +147,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
       setLockedUserId(null);
       setTeamStatuses([]);
     }
-  }, [connectionStatus, selectedTeam]);
+  }, [connectionStatus, selectedTeam, selectedProject]);
 
   const disconnect = useCallback(async () => {
     if (connectionStatus !== 'connected') return;
@@ -158,6 +176,8 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
       selectedTeam,
       setSelectedTeam,
       selectTeamById,
+      selectedProject,
+      setSelectedProject,
       connectionStatus,
       teamStatuses,
       lockedUserId,
