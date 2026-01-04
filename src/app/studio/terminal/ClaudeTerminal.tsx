@@ -28,6 +28,10 @@ export function ClaudeTerminal({
   projectPath = '/var/www/Studio',
   wsUrl,
   port = 5410,
+  projectId,
+  projectSlug,
+  userId,
+  pcTag,
   onMessage,
   sendRef,
   connectRef,
@@ -174,7 +178,12 @@ export function ClaudeTerminal({
 
     const contextPromise = fetchSusanContext();
 
-    const serverUrl = wsUrl || `ws://${DEV_DROPLET}:${port}?path=${encodeURIComponent(projectPath)}`;
+    // Build WebSocket URL with session context for transcript tracking
+    let serverUrl = wsUrl || `ws://${DEV_DROPLET}:${port}?path=${encodeURIComponent(projectPath)}`;
+    if (projectId) serverUrl += `&project_id=${encodeURIComponent(projectId)}`;
+    if (projectSlug) serverUrl += `&project_slug=${encodeURIComponent(projectSlug)}`;
+    if (userId) serverUrl += `&user_id=${encodeURIComponent(userId)}`;
+    if (pcTag) serverUrl += `&pc_tag=${encodeURIComponent(pcTag)}`;
     console.log('[ClaudeTerminal] Connecting via WebSocket to:', serverUrl);
 
     const ws = new WebSocket(serverUrl);
@@ -314,7 +323,7 @@ export function ClaudeTerminal({
     };
 
     wsRef.current = ws;
-  }, [projectPath, wsUrl, port, fetchSusanContext, susanContextRef, connectToChad, sendToChad]);
+  }, [projectPath, wsUrl, port, projectId, projectSlug, userId, pcTag, fetchSusanContext, susanContextRef, connectToChad, sendToChad]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();

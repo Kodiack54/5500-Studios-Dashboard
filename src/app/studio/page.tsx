@@ -38,7 +38,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
 export default function StudioPage() {
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
-  const { selectedTeam, selectTeamById, connectionStatus, connect, disconnect, selectedProject, setSelectedProject } = useDeveloper();
+  const { selectedTeam, selectTeamById, connectionStatus, connect, disconnect, selectedProject, setSelectedProject, pcTag } = useDeveloper();
   const { user } = useUser();
   const isEngineer = useMinRole('engineer');
   const [activePanel, setActivePanel] = useState<string | null>('browser');
@@ -350,6 +350,10 @@ export default function StudioPage() {
             <ClaudeTerminal
               port={selectedTeam.basePort}
               projectPath={selectedProject?.server_path || '/var/www/Studio'}
+              projectId={selectedProject?.id}
+              projectSlug={selectedProject?.slug}
+              userId={user?.id}
+              pcTag={pcTag}
             />
           </div>
         </div>

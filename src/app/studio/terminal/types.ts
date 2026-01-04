@@ -40,6 +40,11 @@ export interface ClaudeTerminalProps {
   projectPath?: string;
   wsUrl?: string;
   port?: number;
+  // Session context for transcript tracking
+  projectId?: string | null;
+  projectSlug?: string | null;
+  userId?: string | null;
+  pcTag?: string | null;
   onMessage?: (message: ChatLogMessage) => void;
   sendRef?: React.MutableRefObject<((message: string) => void) | null>;
   connectRef?: React.MutableRefObject<(() => void) | null>;

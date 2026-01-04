@@ -65,6 +65,7 @@ interface DeveloperContextValue {
   teamStatuses: TeamMemberStatus[];
   lockedUserId: string | null;
   sessionId: string | null;
+  pcTag: string | null;
 
   // Actions
   connect: (userId: string) => Promise<void>;
@@ -81,6 +82,7 @@ const DeveloperContext = createContext<DeveloperContextValue>({
   teamStatuses: [],
   lockedUserId: null,
   sessionId: null,
+  pcTag: null,
   connect: async () => {},
   disconnect: async () => {},
 });
@@ -92,6 +94,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
   const [teamStatuses, setTeamStatuses] = useState<TeamMemberStatus[]>([]);
   const [lockedUserId, setLockedUserId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [pcTag, setPcTag] = useState<string | null>(null);
 
   const selectTeamById = (id: string) => {
     // Can't change team while connected
@@ -136,6 +139,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         setSessionId(data.sessionId);
+        setPcTag(data.pcTag || null);
         setTeamStatuses(data.teamStatuses || initialStatuses.map(m => ({ ...m, status: 'online' })));
         setConnectionStatus('connected');
       } else {
@@ -168,6 +172,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
     setConnectionStatus('disconnected');
     setLockedUserId(null);
     setSessionId(null);
+    setPcTag(null);
     setTeamStatuses([]);
   }, [connectionStatus, sessionId, selectedTeam]);
 
@@ -182,6 +187,7 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
       teamStatuses,
       lockedUserId,
       sessionId,
+      pcTag,
       connect,
       disconnect,
     }}>

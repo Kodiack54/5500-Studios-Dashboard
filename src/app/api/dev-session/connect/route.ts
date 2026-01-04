@@ -115,6 +115,7 @@ export async function POST(request: NextRequest) {
       basePort,
       projectId,
       projectSlug,
+      pcTag,
       teamStatuses,
       message: `Connected to ${devSlot} AI team on project ${projectSlug}`,
     });
