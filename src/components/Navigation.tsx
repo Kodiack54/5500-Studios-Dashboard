@@ -213,15 +213,15 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
                 )}
               </div>
 
-              {/* Page Actions (next to title) */}
+              {/* Page Actions (fills remaining space) */}
               {pageActions && (
-                <div className="flex items-center space-x-2">
+                <div className="flex-1 flex items-center space-x-2">
                   {pageActions}
                 </div>
               )}
 
-              {/* Spacer to push credentials tabs right */}
-              <div className="flex-1" />
+              {/* Spacer to push credentials tabs right (only if no pageActions) */}
+              {!pageActions && <div className="flex-1" />}
             </div>
 
             {/* Right: Credentials Tabs (only on /credentials pages) */}

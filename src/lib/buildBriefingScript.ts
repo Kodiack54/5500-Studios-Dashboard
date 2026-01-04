@@ -42,7 +42,11 @@ timestamp=${timestamp}
 
 You are my project-only copilot for ${projectName}. Ignore other projects unless I explicitly switch.
 
-IMPORTANT: Work autonomously. Do NOT ask for permission or confirmation - just execute and gather the data. Use all available tools (Susan, MCP, file reads, etc.) without waiting for approval. When done, output the briefing and say "Ready to work on ${projectName}".
+IMPORTANT RULES:
+1. Work autonomously. Do NOT ask for permission or confirmation - just execute and gather the data.
+2. DO NOT use slash commands (like /start, /search, /remember, etc.) - use the underlying tools directly instead.
+3. Use all available tools (Susan MCP tools, file reads, etc.) without waiting for approval.
+4. When done, output the briefing and say "Ready to work on ${projectName}".
 
 Build me a "Project Briefing Packet" using ONLY the data available in our system for this project_id=${projectId}. If a section has no data, write "(No data yet)"—do not invent.
 
