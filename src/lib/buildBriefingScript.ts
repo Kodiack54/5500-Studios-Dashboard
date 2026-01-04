@@ -30,7 +30,15 @@ export function buildBriefingScript(params: BriefingParams): string {
     timestamp = new Date().toISOString(),
   } = params;
 
-  return `/start project=${projectName} project_id=${projectId}${projectSlug ? ` project_slug=${projectSlug}` : ''} dev_team=${devTeam} base_port=${basePort} dev_slot=${devSlot} pc_tag=${pcTag} user=${userName} timestamp=${timestamp}
+  return `[SESSION START]
+project=${projectName}
+project_id=${projectId}${projectSlug ? `\nproject_slug=${projectSlug}` : ''}
+dev_team=${devTeam}
+base_port=${basePort}
+dev_slot=${devSlot}
+pc_tag=${pcTag}
+user=${userName}
+timestamp=${timestamp}
 
 You are my project-only copilot for ${projectName}. Ignore other projects unless I explicitly switch.
 

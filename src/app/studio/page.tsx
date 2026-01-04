@@ -121,7 +121,7 @@ export default function StudioPage() {
     // Only show project/environment in header when connected (locked in)
     if (connectionStatus === 'connected' && selectedProject) {
       setPageActions(
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full">
           {/* Locked Project Display */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/80 rounded-lg border border-cyan-500/50">
             <FolderOpen className="w-4 h-4 text-cyan-400" />
@@ -143,10 +143,13 @@ export default function StudioPage() {
             ))}
           </select>
 
-          {/* Briefing Button - Far Right */}
+          {/* Spacer to push Briefing button to far right */}
+          <div className="flex-1" />
+
+          {/* Briefing Button - Far Right with black border */}
           <button
             onClick={() => setShowBriefingOverlay(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all"
+            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium rounded-lg border-2 border-gray-900 hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md"
           >
             <FileText className="w-4 h-4" />
             Briefing
