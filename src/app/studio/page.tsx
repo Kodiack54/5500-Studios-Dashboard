@@ -21,6 +21,20 @@ import { Plug, PlugZap, Monitor } from 'lucide-react';
 import type { Project, Environment } from '@/types';
 import { ENVIRONMENTS } from '@/types';
 
+// Connection snapshot - freezes values when connected to prevent drift
+interface ConnectionSnapshot {
+  teamId: string;
+  basePort: number;
+  devSlot: string;
+  pcTag: string;
+  projectId: string;
+  projectName: string;
+  projectSlug?: string;
+  serverPath: string;
+  userName: string;
+  connectedAt: string;
+}
+
 // Sidebar items - same as kodiack-dashboard-5500
 const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'files', icon: '📁', label: 'Files' },
@@ -47,6 +61,9 @@ export default function StudioPage() {
   // Briefing overlay state
   const [showBriefingOverlay, setShowBriefingOverlay] = useState(false);
   const [hasAutoShown, setHasAutoShown] = useState(false);
+
+  // Connection snapshot - frozen when connected to prevent value drift
+  const [connectionSnapshot, setConnectionSnapshot] = useState<ConnectionSnapshot | null>(null);
 
   // Parent projects for session (only top-level projects)
   const [parentProjects, setParentProjects] = useState<ParentProject[]>([]);
@@ -103,6 +120,28 @@ export default function StudioPage() {
     }
     fetchParentProjects();
   }, []);
+
+  // Freeze connection snapshot when connected - prevents value drift
+  useEffect(() => {
+    if (connectionStatus === 'connected' && !connectionSnapshot && selectedProject && user) {
+      setConnectionSnapshot({
+        teamId: selectedTeam.id,
+        basePort: selectedTeam.basePort,
+        devSlot: selectedTeam.id.replace('dev', ''),
+        pcTag: pcTag || '',
+        projectId: selectedProject.id,
+        projectName: selectedProject.name,
+        projectSlug: selectedProject.slug,
+        serverPath: selectedProject.server_path || '/var/www/Studio',
+        userName: user.name || 'Unknown',
+        connectedAt: new Date().toISOString(),
+      });
+    }
+    // Clear snapshot when disconnected
+    if (connectionStatus !== 'connected' && connectionSnapshot) {
+      setConnectionSnapshot(null);
+    }
+  }, [connectionStatus, connectionSnapshot, selectedTeam, selectedProject, user, pcTag]);
 
   // Auto-show briefing overlay when connected (once per session)
   useEffect(() => {
@@ -383,19 +422,21 @@ export default function StudioPage() {
         </div>
       </div>
 
-      {/* Briefing Overlay */}
-      <BriefingOverlay
-        isOpen={showBriefingOverlay}
-        onClose={() => setShowBriefingOverlay(false)}
-        projectName={selectedProject?.name || ''}
-        projectId={selectedProject?.id || ''}
-        projectSlug={selectedProject?.slug}
-        devTeam={selectedTeam.id}
-        basePort={selectedTeam.basePort}
-        devSlot={selectedTeam.id.replace('dev', '')}
-        pcTag={pcTag || ''}
-        userName={user?.name || 'Unknown'}
-      />
+      {/* Briefing Overlay - uses frozen snapshot to prevent value drift */}
+      {connectionSnapshot && (
+        <BriefingOverlay
+          isOpen={showBriefingOverlay}
+          onClose={() => setShowBriefingOverlay(false)}
+          projectName={connectionSnapshot.projectName}
+          projectId={connectionSnapshot.projectId}
+          projectSlug={connectionSnapshot.projectSlug}
+          devTeam={connectionSnapshot.teamId}
+          basePort={connectionSnapshot.basePort}
+          devSlot={connectionSnapshot.devSlot}
+          pcTag={connectionSnapshot.pcTag}
+          userName={connectionSnapshot.userName}
+        />
+      )}
     </div>
   );
 }
