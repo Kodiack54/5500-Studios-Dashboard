@@ -246,15 +246,15 @@ export default function StudioPage() {
                       setSelectedProject(project || null);
                     }}
                     disabled={isLoadingProjects}
-                    className={`w-full pl-10 pr-4 py-3 rounded-lg border text-left transition-all appearance-none bg-gray-700/50 ${
+                    className={`w-full pl-10 pr-4 py-3 rounded-lg border text-left transition-all appearance-none bg-gray-800 ${
                       selectedProject
                         ? 'border-cyan-500 text-cyan-400'
-                        : 'border-gray-600 text-gray-300'
+                        : 'border-gray-600 text-white'
                     } focus:outline-none focus:ring-2 focus:ring-cyan-500/50`}
                   >
-                    <option value="">-- Select a project --</option>
+                    <option value="" className="bg-gray-800 text-white">-- Select a project --</option>
                     {parentProjects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                      <option key={p.id} value={p.id} className="bg-gray-800 text-white">{p.name}</option>
                     ))}
                   </select>
                 </div>
