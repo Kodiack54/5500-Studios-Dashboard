@@ -173,6 +173,16 @@ export function ClaudeTerminal({
   const connect = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
+    // Safety guard - never connect without full session context
+    if (!projectId || !userId || !pcTag) {
+      console.warn('[ClaudeTerminal] connect() blocked – missing context', {
+        projectId,
+        userId,
+        pcTag,
+      });
+      return;
+    }
+
     setConnecting(true);
     contextSentRef.current = false;
 
@@ -342,16 +352,19 @@ export function ClaudeTerminal({
     }
   }, [connectRef, connect]);
 
-  // Auto-connect when terminal is mounted (Studio page only renders us when session is connected)
+  // Auto-connect when required session context is ready
   useEffect(() => {
-    if (!connected && !connecting && wsRef.current === null) {
-      // Small delay to let xterm initialize first
-      const timer = setTimeout(() => {
-        connect();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, []);
+    if (connected || connecting || wsRef.current) return;
+
+    // Require full Studio context before connecting
+    if (!projectId || !userId || !pcTag) return;
+
+    const timer = setTimeout(() => {
+      connect();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [connected, connecting, projectId, userId, pcTag, connect]);
 
   const sendInput = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

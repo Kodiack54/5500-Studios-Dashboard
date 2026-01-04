@@ -10,8 +10,9 @@ import { useState, useEffect, useContext } from 'react';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
 import { useDeveloper, DEVELOPER_TEAMS, ParentProject } from '@/app/contexts/DeveloperContext';
 import { useUser, useMinRole } from '@/app/settings/UserContext';
-import { Lock, FolderOpen } from 'lucide-react';
+import { Lock, FolderOpen, FileText } from 'lucide-react';
 import { DraggableSidebar, SidebarItem } from './components';
+import { BriefingOverlay } from './components/BriefingOverlay';
 import BrowserPage from './browser/BrowserPage';
 import ClaudeTerminal from './terminal/ClaudeTerminal';
 import { SessionHubPage } from './session-hub';
@@ -42,6 +43,10 @@ export default function StudioPage() {
   const { user } = useUser();
   const isEngineer = useMinRole('engineer');
   const [activePanel, setActivePanel] = useState<string | null>('browser');
+
+  // Briefing overlay state
+  const [showBriefingOverlay, setShowBriefingOverlay] = useState(false);
+  const [hasAutoShown, setHasAutoShown] = useState(false);
 
   // Parent projects for session (only top-level projects)
   const [parentProjects, setParentProjects] = useState<ParentProject[]>([]);
@@ -99,6 +104,14 @@ export default function StudioPage() {
     fetchParentProjects();
   }, []);
 
+  // Auto-show briefing overlay when connected (once per session)
+  useEffect(() => {
+    if (connectionStatus === 'connected' && !hasAutoShown) {
+      setShowBriefingOverlay(true);
+      setHasAutoShown(true);
+    }
+  }, [connectionStatus, hasAutoShown]);
+
   useEffect(() => {
     setPageTitle({
       title: 'Studio',
@@ -115,6 +128,15 @@ export default function StudioPage() {
             <span className="text-cyan-400 text-sm font-medium">{selectedProject.name}</span>
             <Lock className="w-3 h-3 text-cyan-400/60" />
           </div>
+
+          {/* Briefing Button */}
+          <button
+            onClick={() => setShowBriefingOverlay(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all"
+          >
+            <FileText className="w-4 h-4" />
+            Briefing
+          </button>
 
           {/* Environment Dropdown */}
           <select
@@ -358,6 +380,20 @@ export default function StudioPage() {
           </div>
         </div>
       </div>
+
+      {/* Briefing Overlay */}
+      <BriefingOverlay
+        isOpen={showBriefingOverlay}
+        onClose={() => setShowBriefingOverlay(false)}
+        projectName={selectedProject?.name || ''}
+        projectId={selectedProject?.id || ''}
+        projectSlug={selectedProject?.slug}
+        devTeam={selectedTeam.id}
+        basePort={selectedTeam.basePort}
+        devSlot={selectedTeam.id.replace('dev', '')}
+        pcTag={pcTag || ''}
+        userName={user?.name || 'Unknown'}
+      />
     </div>
   );
 }
