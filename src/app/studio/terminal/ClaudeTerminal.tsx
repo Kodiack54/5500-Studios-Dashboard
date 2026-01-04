@@ -240,7 +240,7 @@ export function ClaudeTerminal({
 
         const context = await contextPromise;
         if (context) {
-          xtermRef.current.writeln('\x1b[35m   📚 Susan is loading memory...\x1b[0m');
+          xtermRef.current.writeln('\x1b[35m   📚 Loading project context...\x1b[0m');
         }
         xtermRef.current.writeln('');
       }
@@ -326,7 +326,7 @@ export function ClaudeTerminal({
             }
           }
 
-          // Note: Susan briefing is now sent via timer (10s after connect)
+          // Note: Project briefing is now sent via timer (10s after connect)
           // Detection removed for reliability
         } else if (msg.type === 'exit') {
           if (xtermRef.current) {

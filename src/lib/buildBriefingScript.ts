@@ -44,8 +44,8 @@ You are my project-only copilot for ${projectName}. Ignore other projects unless
 
 IMPORTANT RULES:
 1. Work autonomously. Do NOT ask for permission or confirmation - just execute and gather the data.
-2. DO NOT use slash commands (like /start, /search, /remember, etc.) - use the underlying tools directly instead.
-3. Use all available tools (Susan MCP tools, file reads, etc.) without waiting for approval.
+2. DO NOT use slash commands (like /start, /search, /remember, etc.) - use the underlying MCP tools directly instead.
+3. Use all available MCP tools (mcp__kodiack-studio__*, file reads, etc.) without waiting for approval.
 4. When done, output the briefing and say "Ready to work on ${projectName}".
 
 Build me a "Project Briefing Packet" using ONLY the data available in our system for this project_id=${projectId}. If a section has no data, write "(No data yet)"—do not invent.

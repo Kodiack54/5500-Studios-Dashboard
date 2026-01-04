@@ -1,4 +1,4 @@
-// Susan briefing hook - fetches and manages Susan's context
+// Project context hook - fetches and manages project context from backend
 
 import { useState, useRef, useCallback } from 'react';
 import { SUSAN_URL } from './constants';
@@ -13,7 +13,7 @@ export function buildContextPrompt(context: SusanContext): string {
   if (context.greeting) {
     return context.greeting;
   }
-  return "Susan couldn't load your memory. Starting fresh - what would you like to work on?";
+  return "Couldn't load project context. Starting fresh - what would you like to work on?";
 }
 
 export function useSusanBriefing(projectPath: string) {
@@ -23,7 +23,7 @@ export function useSusanBriefing(projectPath: string) {
 
   const fetchSusanContext = useCallback(async (): Promise<SusanContext | null> => {
     setMemoryStatus('loading');
-    console.log('[useSusanBriefing] Fetching context from Susan...');
+    console.log('[useSusanBriefing] Fetching project context...');
     try {
       const response = await fetch(
         `${SUSAN_URL}/api/context?project=${encodeURIComponent(projectPath)}`
@@ -41,10 +41,10 @@ export function useSusanBriefing(projectPath: string) {
         setMemoryStatus('loaded');
         return context;
       } else {
-        console.log('[useSusanBriefing] Susan returned non-OK:', response.status);
+        console.log('[useSusanBriefing] Context API returned non-OK:', response.status);
       }
     } catch (err) {
-      console.log('[useSusanBriefing] Susan not available:', err);
+      console.log('[useSusanBriefing] Context API not available:', err);
     }
     setMemoryStatus('error');
     return null;
