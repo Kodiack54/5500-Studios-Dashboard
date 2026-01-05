@@ -9,7 +9,9 @@ import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
 import AITeamChat from '@/app/ai-team/components/AITeamChat';
 import ContextIndicator from '@/app/components/ContextIndicator';
+import ContextExitPopup from '@/app/components/ContextExitPopup';
 import { ProductionStatusContext } from '@/app/layout';
+import { useUserContext } from '@/app/contexts/UserContextProvider';
 import { supabase } from '../lib/supabase';
 
 interface NavigationProps {
@@ -21,7 +23,36 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
   const pathname = usePathname();
   const router = useRouter();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showContextPopup, setShowContextPopup] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const { showServers, toggleServers } = useContext(ProductionStatusContext);
+  const { context } = useUserContext();
+
+  // Check if user is on dashboard
+  const isOnDashboard = pathname === '/dashboard' || pathname === '/';
+
+  // Check if user has selected a project or other mode (not just auto-flipped to 'other' from dashboard)
+  const hasSelectedContext = context && context.source === 'manual';
+
+  // Handle tab click - intercept if on dashboard without having selected context
+  const handleTabClick = (e: React.MouseEvent, path: string) => {
+    // If on dashboard and hasn't manually selected a context, show popup
+    if (isOnDashboard && !hasSelectedContext) {
+      e.preventDefault();
+      setPendingNavigation(path);
+      setShowContextPopup(true);
+    }
+    // Otherwise, let Link handle navigation normally
+  };
+
+  // When context is set from popup, navigate to pending destination
+  const handleContextSet = () => {
+    setShowContextPopup(false);
+    if (pendingNavigation) {
+      router.push(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  };
 
   // Tab navigation - exactly like MyKeystone style
   // Tabs: Servers / Dev Tools / HelpDesk / Calendar / Development
@@ -112,6 +143,7 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
                       key={tab.id}
                       href={tab.path}
                       className={tabClass}
+                      onClick={(e) => handleTabClick(e, tab.path)}
                     >
                       {tab.label}
                     </Link>
@@ -221,6 +253,17 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
             </div>
         </div>
       </div>
+
+      {/* Context Exit Popup - shows when leaving dashboard */}
+      {showContextPopup && (
+        <ContextExitPopup
+          onClose={() => {
+            setShowContextPopup(false);
+            setPendingNavigation(null);
+          }}
+          onContextSet={handleContextSet}
+        />
+      )}
 
       {/* Logout Confirmation Modal - EXACT MyKeystone style */}
       {showLogoutConfirm && (

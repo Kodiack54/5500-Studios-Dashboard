@@ -3,10 +3,11 @@
 import { useState, useEffect, useContext } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { User, Users, Calendar, CalendarCheck, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { User, Users, Calendar, CalendarCheck, AlertCircle, ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import ServerStatusIndicator, { ProjectStatus, SlotStatus } from './ServerStatusIndicator';
 import ServerDetailPanel from './ServerDetailPanel';
 import { ProductionStatusContext } from '@/app/layout';
+import { useUserContext } from '@/app/contexts/UserContextProvider';
 
 // Mock current user - TODO: Get from auth context
 const currentUser = {
@@ -42,9 +43,14 @@ export default function Sidebar() {
   const searchParams = useSearchParams();
   const isCalendarPage = pathname?.startsWith('/calendar');
   const isDevToolsPage = pathname?.startsWith('/dev-controls');
+  const isServersPage = pathname?.startsWith('/servers');
   const calendarMode = searchParams?.get('mode') || 'my';
   const selectedMemberId = searchParams?.get('member');
   const selectedTeamId = searchParams?.get('team');
+
+  // Context state - determines which nav items are accessible
+  const { context } = useUserContext();
+  const hasProjectOrSupport = context && (context.mode === 'project' || context.mode === 'support');
 
   // Collapsible states - showServers comes from shared context (toggled via navbar)
   const { showServers, setShowServers } = useContext(ProductionStatusContext);
@@ -180,9 +186,9 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* Credentials Buttons - Below servers */}
-        {showServers && (
-          <div className="px-2 py-2 space-y-1">
+        {/* Group A: Server-only items (Overview, Credentials) */}
+        {isServersPage && (
+          <div className="px-2 py-2 space-y-1 border-b border-gray-700">
             <Link
               href="/credentials"
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -205,63 +211,111 @@ export default function Sidebar() {
               <span>🔑</span>
               <span>Credentials</span>
             </Link>
-            <Link
-              href="/session-logs"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === '/session-logs'
-                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>🎯</span>
-              <span>Session Logs</span>
-            </Link>
-            <Link
-              href="/project-management"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname?.startsWith('/project-management')
-                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>📁</span>
-              <span>Projects</span>
-            </Link>
-            <Link
-              href="/the-forge"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname?.startsWith('/the-forge')
-                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>🔥</span>
-              <span>The Forge</span>
-            </Link>
-            <Link
-              href="/ai-team"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname?.startsWith('/ai-team')
-                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>🤖</span>
-              <span>AI Team</span>
-            </Link>
-            <Link
-              href="/terminal"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname?.startsWith('/terminal')
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>💻</span>
-              <span>Terminal</span>
-            </Link>
           </div>
         )}
+
+        {/* Group C: Always visible (projectless buckets) */}
+        <div className="px-2 py-2 space-y-1 border-b border-gray-700">
+          <Link
+            href="/the-forge"
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              pathname?.startsWith('/the-forge')
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <span>🔥</span>
+            <span>The Forge</span>
+          </Link>
+          <Link
+            href="/roadmap"
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              pathname?.startsWith('/roadmap')
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <span>🗺️</span>
+            <span>Roadmap / Planning</span>
+          </Link>
+        </div>
+
+        {/* Group D: Requires project or support mode */}
+        <div className="px-2 py-2 space-y-1">
+          {hasProjectOrSupport ? (
+            <>
+              <Link
+                href="/session-logs"
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  pathname === '/session-logs'
+                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                }`}
+              >
+                <span>🎯</span>
+                <span>Session Logs</span>
+              </Link>
+              <Link
+                href="/project-management"
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  pathname?.startsWith('/project-management')
+                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                }`}
+              >
+                <span>📁</span>
+                <span>Projects</span>
+              </Link>
+              <Link
+                href="/ai-team"
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  pathname?.startsWith('/ai-team')
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                }`}
+              >
+                <span>🤖</span>
+                <span>AI Team</span>
+              </Link>
+              <Link
+                href="/terminal"
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  pathname?.startsWith('/terminal')
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                }`}
+              >
+                <span>💻</span>
+                <span>Terminal</span>
+              </Link>
+            </>
+          ) : (
+            <>
+              {/* Locked items - show but disabled */}
+              <div className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 cursor-not-allowed">
+                <span>🎯</span>
+                <span>Session Logs</span>
+                <Lock className="w-3 h-3 ml-auto" />
+              </div>
+              <div className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 cursor-not-allowed">
+                <span>📁</span>
+                <span>Projects</span>
+                <Lock className="w-3 h-3 ml-auto" />
+              </div>
+              <div className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 cursor-not-allowed">
+                <span>🤖</span>
+                <span>AI Team</span>
+                <Lock className="w-3 h-3 ml-auto" />
+              </div>
+              <div className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 cursor-not-allowed">
+                <span>💻</span>
+                <span>Terminal</span>
+                <Lock className="w-3 h-3 ml-auto" />
+              </div>
+              <p className="text-xs text-gray-500 px-3 mt-2">Select a project or enter support mode to access these</p>
+            </>
+          )}
+        </div>
 
         {/* Calendar Section - Scrollable independently */}
         {isCalendarPage && (
