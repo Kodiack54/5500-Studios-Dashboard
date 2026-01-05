@@ -65,7 +65,8 @@ export async function GET(request: NextRequest) {
       [userId, pcTag]
     );
 
-    const context = result.data?.[0] || null;
+    const rows = Array.isArray(result.data) ? result.data : [];
+    const context = rows[0] || null;
 
     return NextResponse.json({
       success: true,
@@ -149,7 +150,8 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    const newContext = insertResult.data?.[0];
+    const insertRows = Array.isArray(insertResult.data) ? insertResult.data : [];
+    const newContext = insertRows[0];
 
     if (!newContext) {
       return NextResponse.json(
@@ -207,7 +209,8 @@ export async function DELETE(request: NextRequest) {
       [userId, pcTag]
     );
 
-    const endedContext = result.data?.[0];
+    const endRows = Array.isArray(result.data) ? result.data : [];
+    const endedContext = endRows[0];
 
     return NextResponse.json({
       success: true,
