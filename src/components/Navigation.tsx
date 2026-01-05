@@ -3,14 +3,13 @@
 import { useState, useContext, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, DoorOpen, Users, ArrowLeft, Building2 } from 'lucide-react';
+import { ChevronDown, DoorOpen, ArrowLeft } from 'lucide-react';
 import TimeClockDropdown from './TimeClockDropdown';
 import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
 import AITeamChat from '@/app/ai-team/components/AITeamChat';
 import ContextIndicator from '@/app/components/ContextIndicator';
 import { ProductionStatusContext } from '@/app/layout';
-import { useClient } from '@/app/contexts/ClientContext';
 import { supabase } from '../lib/supabase';
 
 interface NavigationProps {
@@ -23,7 +22,6 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
   const router = useRouter();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { showServers, toggleServers } = useContext(ProductionStatusContext);
-  const { clients, selectedClient, setSelectedClient, isLoading: clientsLoading } = useClient();
 
   // Tab navigation - exactly like MyKeystone style
   // Tabs: Servers / Dev Tools / HelpDesk / Calendar / Development
@@ -68,13 +66,6 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push('/');
-  }
-
-  function handleClientChange(clientId: string) {
-    const client = clients.find(c => c.id === clientId);
-    if (client) {
-      setSelectedClient(client);
-    }
   }
 
   return (
@@ -129,33 +120,10 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
               </div>
             </div>
 
-            {/* Right: Context, Client Selector, Time Clock, Settings, Logout */}
+            {/* Right: Context Indicator, Time Clock, Settings, Logout */}
             <div className="flex items-center space-x-2">
-              {/* Context Indicator - shows current mode/project */}
+              {/* Context Indicator - shows current mode/project (replaces Client dropdown) */}
               <ContextIndicator />
-
-              {/* Client Selector */}
-              <div className="relative">
-                <select
-                  value={selectedClient?.id || 'all'}
-                  onChange={(e) => {
-                    if (e.target.value === 'all') {
-                      setSelectedClient(null);
-                    } else {
-                      handleClientChange(e.target.value);
-                    }
-                  }}
-                  disabled={clientsLoading}
-                  className="appearance-none bg-gray-700 text-white pl-10 pr-10 py-2 rounded-xl border border-gray-600 focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-600 disabled:opacity-50 min-w-[200px]"
-                >
-                  <option value="all">All Clients</option>
-                  {clients.map(client => (
-                    <option key={client.id} value={client.id}>{client.name}</option>
-                  ))}
-                </select>
-                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-              </div>
 
               {/* Team Chat - Slack-like messaging for devs */}
               <ChatDropdown />

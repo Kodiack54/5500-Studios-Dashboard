@@ -3,9 +3,8 @@
 /**
  * UserContextProvider - GLOBAL SOURCE OF TRUTH
  *
- * UI is the event source. Every navigation that changes what the dev
- * is doing fires a context update. This provider manages the active
- * context and provides auto-flip hooks.
+ * Context is set by tab navigation (auto-flip hooks).
+ * NO gate modal. NO popup. Just provides context state.
  */
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
@@ -34,14 +33,6 @@ interface UserContextValue {
   isLoading: boolean;
   hasActiveContext: boolean;
 
-  // Context gate state
-  showContextGate: boolean;
-  setShowContextGate: (show: boolean) => void;
-
-  // Toast state
-  toastMessage: string | null;
-  clearToast: () => void;
-
   // Actions
   fetchContext: () => Promise<void>;
   setContext: (params: SetContextParams) => Promise<boolean>;
@@ -66,10 +57,6 @@ const UserContextContext = createContext<UserContextValue>({
   context: null,
   isLoading: true,
   hasActiveContext: false,
-  showContextGate: false,
-  setShowContextGate: () => {},
-  toastMessage: null,
-  clearToast: () => {},
   fetchContext: async () => {},
   setContext: async () => false,
   flipContext: async () => false,
@@ -82,24 +69,10 @@ const UserContextContext = createContext<UserContextValue>({
 export function UserContextProvider({ children }: { children: ReactNode }) {
   const [context, setContextState] = useState<UserContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showContextGate, setShowContextGate] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [pcTag, setPcTag] = useState<string | null>(null);
 
   const hasActiveContext = !!context;
-
-  const clearToast = useCallback(() => {
-    setToastMessage(null);
-  }, []);
-
-  // Auto-clear toast after 3 seconds
-  useEffect(() => {
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toastMessage]);
 
   const setUserIdentity = useCallback((newUserId: string, newPcTag: string) => {
     setUserId(newUserId);
@@ -119,9 +92,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         setContextState(data.context);
-        if (!data.hasActiveContext) {
-          setShowContextGate(true);
-        }
+        // NO gate popup - just set context silently
       }
     } catch (error) {
       console.error('[UserContext] Failed to fetch context:', error);
@@ -148,10 +119,6 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         setContextState(data.context);
-        setShowContextGate(false);
-        if (data.toast) {
-          setToastMessage(data.toast);
-        }
         return true;
       } else {
         console.error('[UserContext] Failed to set context:', data.error);
@@ -163,7 +130,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, pcTag]);
 
-  // Convenience method for auto-flip
+  // Convenience method for auto-flip (called by tab navigation hooks)
   const flipContext = useCallback(async (
     mode: ContextMode,
     projectId?: string,
@@ -191,8 +158,6 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         setContextState(null);
-        setShowContextGate(true);
-        setToastMessage('Context ended');
       }
     } catch (error) {
       console.error('[UserContext] Error ending context:', error);
@@ -211,10 +176,6 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
       context,
       isLoading,
       hasActiveContext,
-      showContextGate,
-      setShowContextGate,
-      toastMessage,
-      clearToast,
       fetchContext,
       setContext,
       flipContext,
@@ -245,14 +206,4 @@ export const MODE_LABELS: Record<ContextMode, string> = {
   roadmap: 'Roadmap',
   meeting: 'Meeting',
   break: 'Break',
-};
-
-export const MODE_COLORS: Record<ContextMode, string> = {
-  project: 'bg-sky-600',
-  forge: 'bg-orange-600',
-  helpdesk: 'bg-green-600',
-  ops: 'bg-purple-600',
-  roadmap: 'bg-indigo-600',
-  meeting: 'bg-yellow-600',
-  break: 'bg-gray-600',
 };
