@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
 
     let query = db.from('dev_ai_sessions')
-      .select('id, started_at, ended_at, message_count, last_message_at, terminal_port, user_name, project_id, source_type, source_name, summary, key_topics, files_modified, status, processed_by, processed_at, items_extracted, conflicts_found, workspace, created_at')
+      .select('id, started_at, ended_at, message_count, last_message_at, terminal_port, user_name, project_id, source_type, source_name, summary, key_topics, files_modified, status, processed_by, processed_at, items_extracted, conflicts_found, workspace, created_at, mode, project_slug, pc_tag')
       .order('started_at', { ascending: false })
       .limit(limit);
 
