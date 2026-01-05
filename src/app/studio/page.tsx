@@ -10,6 +10,7 @@ import { useState, useEffect, useContext } from 'react';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
 import { useDeveloper, DEVELOPER_TEAMS, ParentProject } from '@/app/contexts/DeveloperContext';
 import { useUser, useMinRole } from '@/app/settings/UserContext';
+import { useProjectAutoFlip } from '@/app/hooks/useContextAutoFlip';
 import { Lock, FolderOpen, FileText } from 'lucide-react';
 import { DraggableSidebar, SidebarItem } from './components';
 import { BriefingOverlay } from './components/BriefingOverlay';
@@ -57,6 +58,13 @@ export default function StudioPage() {
   const { user } = useUser();
   const isEngineer = useMinRole('engineer');
   const [activePanel, setActivePanel] = useState<string | null>('browser');
+
+  // Auto-flip context to Project mode when a project is selected
+  useProjectAutoFlip(
+    selectedProject?.id,
+    selectedProject?.slug,
+    selectedTeam?.id
+  );
 
   // Briefing overlay state
   const [showBriefingOverlay, setShowBriefingOverlay] = useState(false);

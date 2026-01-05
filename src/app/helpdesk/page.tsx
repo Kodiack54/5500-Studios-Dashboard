@@ -3,6 +3,7 @@ import { getHealth, getStats, getSystemTickets, getUserTickets } from './api';
 import HelpdeskStats from './components/HelpdeskStats';
 import SystemTicketsTable from './components/SystemTicketsTable';
 import UserTicketsTable from './components/UserTicketsTable';
+import HelpdeskContextFlip from './components/HelpdeskContextFlip';
 
 export default async function HelpdeskPage() {
   let health: any = null;
@@ -26,6 +27,8 @@ export default async function HelpdeskPage() {
 
   return (
     <div>
+      {/* Auto-flip context to Helpdesk mode */}
+      <HelpdeskContextFlip />
       {/* Header */}
       <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
         <div>

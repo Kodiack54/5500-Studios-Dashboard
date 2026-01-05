@@ -7,6 +7,7 @@ import {
   Headphones, Terminal, Activity, Clock, CheckCircle
 } from 'lucide-react';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
+import { useOpsAutoFlip } from '@/app/hooks/useContextAutoFlip';
 
 // Section card type
 interface SectionCard {
@@ -25,6 +26,9 @@ interface SectionCard {
 export default function DevControlsPage() {
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
+
+  // Auto-flip context to Ops mode when entering this page
+  useOpsAutoFlip();
 
   // Set page title and actions in navbar
   useEffect(() => {

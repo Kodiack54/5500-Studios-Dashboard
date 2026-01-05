@@ -8,6 +8,7 @@ import TimeClockDropdown from './TimeClockDropdown';
 import SettingsDropdown from './SettingsDropdown';
 import ChatDropdown from './ChatDropdown';
 import AITeamChat from '@/app/ai-team/components/AITeamChat';
+import ContextIndicator from '@/app/components/ContextIndicator';
 import { ProductionStatusContext } from '@/app/layout';
 import { useClient } from '@/app/contexts/ClientContext';
 import { supabase } from '../lib/supabase';
@@ -128,8 +129,11 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
               </div>
             </div>
 
-            {/* Right: Client Selector, Time Clock, Settings, Logout */}
+            {/* Right: Context, Client Selector, Time Clock, Settings, Logout */}
             <div className="flex items-center space-x-2">
+              {/* Context Indicator - shows current mode/project */}
+              <ContextIndicator />
+
               {/* Client Selector */}
               <div className="relative">
                 <select

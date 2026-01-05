@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Flame, Gamepad2, Lightbulb, Wrench, Sparkles, Brain, Plus, Trash2, ChevronRight } from 'lucide-react';
+import { useForgeAutoFlip } from '@/app/hooks/useContextAutoFlip';
 
 interface ForgeEntry {
   id: string;
@@ -31,6 +32,9 @@ const STATUS_LABELS = {
 };
 
 export default function TheForgePage() {
+  // Auto-flip context to Forge mode when entering this page
+  useForgeAutoFlip();
+
   const [entries, setEntries] = useState<ForgeEntry[]>([]);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
