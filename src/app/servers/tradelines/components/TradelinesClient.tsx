@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useContext } from 'react';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
+import { useSupportAutoFlip } from '@/app/hooks/useContextAutoFlip';
 import ServerListItem from './ServerListItem';
 import ServerDetailPanel from './ServerDetailPanel';
 import ServerStatsPanel from './ServerStatsPanel';
@@ -80,6 +81,9 @@ function getWorkerTabs(slotId: string | undefined): { id: WorkerType; label: str
 }
 
 export default function TradelinesClient({ tradelines, healthAll, analytics, initialError }: TradelinesClientProps) {
+  // Auto-flip to SUPPORT mode - servers are support/ops work
+  useSupportAutoFlip();
+
   const [error, setError] = useState<string | null>(initialError);
   const [selectedTradeline, setSelectedTradeline] = useState<Tradeline | null>(
     tradelines.length > 0 ? tradelines[0] : null

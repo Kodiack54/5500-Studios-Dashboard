@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export type ContextMode = 'project' | 'forge' | 'helpdesk' | 'ops' | 'roadmap' | 'meeting' | 'break';
+export type ContextMode = 'project' | 'forge' | 'support' | 'planning' | 'other' | 'break';
 export type ContextSource = 'universal' | 'studio' | 'autoflip' | 'timeclock' | 'manual';
 
 export interface UserContext {
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate mode
-    const validModes: ContextMode[] = ['project', 'forge', 'helpdesk', 'ops', 'roadmap', 'meeting', 'break'];
+    const validModes: ContextMode[] = ['project', 'forge', 'support', 'planning', 'other', 'break'];
     if (!validModes.includes(mode)) {
       return NextResponse.json(
         { success: false, error: `Invalid mode. Must be one of: ${validModes.join(', ')}` },

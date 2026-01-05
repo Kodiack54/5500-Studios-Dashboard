@@ -83,24 +83,33 @@ export function useForgeAutoFlip() {
   useContextAutoFlip('forge');
 }
 
-export function useHelpdeskAutoFlip() {
-  useContextAutoFlip('helpdesk');
+export function useSupportAutoFlip() {
+  useContextAutoFlip('support');
 }
 
-export function useOpsAutoFlip() {
-  useContextAutoFlip('ops');
+export function usePlanningAutoFlip() {
+  useContextAutoFlip('planning');
 }
 
-export function useRoadmapAutoFlip() {
-  useContextAutoFlip('roadmap');
-}
-
-export function useMeetingAutoFlip() {
-  useContextAutoFlip('meeting');
+export function useOtherAutoFlip() {
+  useContextAutoFlip('other');
 }
 
 export function useBreakAutoFlip() {
   useContextAutoFlip('break');
+}
+
+// Legacy aliases (will be removed)
+export function useHelpdeskAutoFlip() {
+  useContextAutoFlip('support');
+}
+
+export function useOpsAutoFlip() {
+  useContextAutoFlip('support');
+}
+
+export function useRoadmapAutoFlip() {
+  useContextAutoFlip('planning');
 }
 
 /**

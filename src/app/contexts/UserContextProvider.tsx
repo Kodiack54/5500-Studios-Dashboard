@@ -9,7 +9,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 
-export type ContextMode = 'project' | 'forge' | 'helpdesk' | 'ops' | 'roadmap' | 'meeting' | 'break';
+export type ContextMode = 'project' | 'forge' | 'support' | 'planning' | 'other' | 'break';
 export type ContextSource = 'universal' | 'studio' | 'autoflip' | 'timeclock' | 'manual';
 
 export interface UserContext {
@@ -201,9 +201,8 @@ export function useUserContext() {
 export const MODE_LABELS: Record<ContextMode, string> = {
   project: 'Project',
   forge: 'Forge',
-  helpdesk: 'Helpdesk',
-  ops: 'Ops',
-  roadmap: 'Roadmap',
-  meeting: 'Meeting',
+  support: 'Support',
+  planning: 'Planning',
+  other: 'Other',
   break: 'Break',
 };

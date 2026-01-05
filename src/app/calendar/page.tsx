@@ -10,6 +10,7 @@ import CreateEventModal from './components/CreateEventModal';
 import EditEventModal from './components/EditEventModal';
 import TimeOffRequestModal from './components/TimeOffRequestModal';
 import TimeAdjustmentModal from './components/TimeAdjustmentModal';
+import { useOtherAutoFlip } from '@/app/hooks/useContextAutoFlip';
 
 interface CalendarEvent {
   id: string;
@@ -44,6 +45,9 @@ export default function CalendarPage() {
 }
 
 function CalendarContent() {
+  // Auto-flip to OTHER mode - calendar is admin/personal, no Claude tracking
+  useOtherAutoFlip();
+
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
   const searchParams = useSearchParams();
