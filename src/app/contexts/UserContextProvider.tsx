@@ -115,7 +115,15 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         setContextState(data.context);
-        // NO gate popup - just set context silently
+        // Also set previousWorkMode if loaded context is project/support
+        if (data.context && (data.context.mode === 'project' || data.context.mode === 'support')) {
+          setPreviousWorkMode({
+            mode: data.context.mode,
+            projectId: data.context.project_id || undefined,
+            projectSlug: data.context.project_slug || undefined,
+            projectName: data.context.project_name || undefined,
+          });
+        }
       }
     } catch (error) {
       console.error('[UserContext] Failed to fetch context:', error);

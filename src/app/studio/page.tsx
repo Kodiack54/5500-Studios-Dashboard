@@ -67,9 +67,14 @@ export default function StudioPage() {
     selectedTeam?.id
   );
 
-  // Briefing overlay state
+  // Briefing overlay state - check sessionStorage for hasAutoShown
   const [showBriefingOverlay, setShowBriefingOverlay] = useState(false);
-  const [hasAutoShown, setHasAutoShown] = useState(false);
+  const [hasAutoShown, setHasAutoShown] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('briefing_shown') === 'true';
+    }
+    return false;
+  });
 
   // Connection snapshot - frozen when connected to prevent value drift
   const [connectionSnapshot, setConnectionSnapshot] = useState<ConnectionSnapshot | null>(null);
@@ -152,11 +157,12 @@ export default function StudioPage() {
     }
   }, [connectionStatus, connectionSnapshot, selectedTeam, selectedProject, user, pcTag]);
 
-  // Auto-show briefing overlay when connected (once per session)
+  // Auto-show briefing overlay when connected (once per browser session)
   useEffect(() => {
     if (connectionStatus === 'connected' && !hasAutoShown) {
       setShowBriefingOverlay(true);
       setHasAutoShown(true);
+      sessionStorage.setItem('briefing_shown', 'true');
     }
   }, [connectionStatus, hasAutoShown]);
 

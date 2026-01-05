@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 
 // Developer team definitions with port ranges
 export interface DeveloperTeam {
@@ -87,7 +87,48 @@ const DeveloperContext = createContext<DeveloperContextValue>({
   disconnect: async () => {},
 });
 
+// Session storage key for persisting connection state
+const SESSION_KEY = 'kodiack_dev_session';
+
+interface PersistedSession {
+  teamId: string;
+  projectId: string;
+  projectName: string;
+  projectSlug: string;
+  serverPath?: string;
+  connectionStatus: ConnectionStatus;
+  sessionId: string | null;
+  pcTag: string | null;
+  lockedUserId: string | null;
+}
+
+function loadPersistedSession(): PersistedSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = sessionStorage.getItem(SESSION_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch (e) {
+    console.error('Failed to load persisted session:', e);
+  }
+  return null;
+}
+
+function savePersistedSession(session: PersistedSession | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (session) {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    } else {
+      sessionStorage.removeItem(SESSION_KEY);
+    }
+  } catch (e) {
+    console.error('Failed to save persisted session:', e);
+  }
+}
+
 export function DeveloperProvider({ children }: { children: ReactNode }) {
+  // Initialize from persisted session
+  const [initialized, setInitialized] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<DeveloperTeam>(DEVELOPER_TEAMS[0]);
   const [selectedProject, setSelectedProject] = useState<ParentProject | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
@@ -95,6 +136,34 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
   const [lockedUserId, setLockedUserId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [pcTag, setPcTag] = useState<string | null>(null);
+
+  // Restore session from sessionStorage on mount
+  useEffect(() => {
+    const persisted = loadPersistedSession();
+    if (persisted && persisted.connectionStatus === 'connected') {
+      const team = DEVELOPER_TEAMS.find(t => t.id === persisted.teamId);
+      if (team) {
+        setSelectedTeam(team);
+        setSelectedProject({
+          id: persisted.projectId,
+          name: persisted.projectName,
+          slug: persisted.projectSlug,
+          server_path: persisted.serverPath,
+        });
+        setConnectionStatus('connected');
+        setSessionId(persisted.sessionId);
+        setPcTag(persisted.pcTag);
+        setLockedUserId(persisted.lockedUserId);
+        // Restore team statuses as online
+        setTeamStatuses(KODIACK_AI_TEAM.map(member => ({
+          name: member.name,
+          port: team.basePort + member.portOffset,
+          status: 'online',
+        })));
+      }
+    }
+    setInitialized(true);
+  }, []);
 
   const selectTeamById = (id: string) => {
     // Can't change team while connected
@@ -142,6 +211,18 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
         setPcTag(data.pcTag || null);
         setTeamStatuses(data.teamStatuses || initialStatuses.map(m => ({ ...m, status: 'online' })));
         setConnectionStatus('connected');
+        // Persist session to sessionStorage
+        savePersistedSession({
+          teamId: selectedTeam.id,
+          projectId: selectedProject.id,
+          projectName: selectedProject.name,
+          projectSlug: selectedProject.slug,
+          serverPath: selectedProject.server_path,
+          connectionStatus: 'connected',
+          sessionId: data.sessionId,
+          pcTag: data.pcTag || null,
+          lockedUserId: userId,
+        });
       } else {
         throw new Error(data.error || 'Failed to connect');
       }
@@ -174,6 +255,11 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
     setSessionId(null);
     setPcTag(null);
     setTeamStatuses([]);
+    // Clear persisted session and briefing flag
+    savePersistedSession(null);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('briefing_shown');
+    }
   }, [connectionStatus, sessionId, selectedTeam]);
 
   return (
