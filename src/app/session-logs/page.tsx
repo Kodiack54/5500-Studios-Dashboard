@@ -42,6 +42,11 @@ interface Session {
   source_type?: string;
   source_name?: string;
   project_path?: string;
+  // Context fields from Chad's resolver
+  mode?: string;
+  project_id?: string;
+  project_slug?: string;
+  pc_tag?: string;
 }
 
 interface BucketCounts {
@@ -742,7 +747,13 @@ function SessionItem({ session }: { session: Session }) {
         <span className="text-[10px] text-gray-500 font-mono shrink-0 ml-2">{datetime}</span>
       </div>
       <div className="flex items-center justify-between mt-1">
-        <span className="text-xs text-gray-500 truncate">{session.project_path || displaySourceName(session.source_name)}</span>
+        <span className="text-xs text-gray-400 truncate">
+          {session.project_slug
+            ? `[USER] ${session.project_slug.toUpperCase()}`
+            : session.mode
+              ? `[USER] ${session.mode.toUpperCase()}`
+              : session.project_path || displaySourceName(session.source_name)}
+        </span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColors[session.status || 'captured'] || statusColors.captured}`}>
           {session.status || 'captured'}
         </span>

@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useContext } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageTitleContext, PageActionsContext } from '@/app/layout';
 import { useDeveloper, DEVELOPER_TEAMS, ParentProject } from '@/app/contexts/DeveloperContext';
 import { useUser, useMinRole } from '@/app/settings/UserContext';
@@ -16,8 +17,6 @@ import { DraggableSidebar, SidebarItem } from './components';
 import { BriefingOverlay } from './components/BriefingOverlay';
 import BrowserPage from './browser/BrowserPage';
 import ClaudeTerminal from './terminal/ClaudeTerminal';
-import { SessionHubPage } from './session-hub';
-import ProjectManagementPanel from '../project-management/ProjectManagementPanel';
 import { Plug, PlugZap, Monitor } from 'lucide-react';
 import type { Project, Environment } from '@/types';
 import { ENVIRONMENTS } from '@/types';
@@ -51,13 +50,31 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'health', icon: '🩺', label: 'AI Health' },
 ];
 
+// Map sidebar IDs to dashboard routes (navigate instead of embed)
+const NAVIGATE_PANELS: Record<string, string> = {
+  'hub': '/session-logs',
+  'projects': '/project-management',
+  'ai-usage': '/ai-team',
+  'health': '/ai-team',
+};
+
 export default function StudioPage() {
+  const router = useRouter();
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
   const { selectedTeam, selectTeamById, connectionStatus, connect, disconnect, selectedProject, setSelectedProject, pcTag } = useDeveloper();
   const { user } = useUser();
   const isEngineer = useMinRole('engineer');
   const [activePanel, setActivePanel] = useState<string | null>('browser');
+
+  // Handle panel change - navigate to dashboard pages or set active panel
+  const handlePanelChange = (panel: string | null) => {
+    if (panel && NAVIGATE_PANELS[panel]) {
+      router.push(NAVIGATE_PANELS[panel]);
+    } else {
+      setActivePanel(panel);
+    }
+  };
 
   // Auto-flip context to Project mode when a project is selected
   useProjectAutoFlip(
@@ -376,7 +393,7 @@ export default function StudioPage() {
         <DraggableSidebar
           items={SIDEBAR_ITEMS}
           activePanel={activePanel}
-          onPanelChange={setActivePanel}
+          onPanelChange={handlePanelChange}
         />
       </div>
 
@@ -389,12 +406,6 @@ export default function StudioPage() {
               project={selectedProject as Project | null}
               env={selectedEnv}
             />
-          ) : activePanel === 'hub' ? (
-            <SessionHubPage teamBasePort={selectedTeam.basePort} />
-          ) : activePanel === 'projects' ? (
-            <div className="flex-1 overflow-auto p-4">
-              <ProjectManagementPanel />
-            </div>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
               {activePanel ? `${activePanel} panel - coming soon` : 'Select a panel from the sidebar'}
