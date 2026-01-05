@@ -180,8 +180,8 @@ export default function Sidebar() {
   return (
     <>
       <aside className="w-64 bg-gray-900/50 border-r border-gray-700 flex flex-col h-full overflow-hidden">
-        {/* Production Servers Section - Toggled via navbar button */}
-        {showServers && (
+        {/* Production Servers Section - Only on Servers tab */}
+        {isServersPage && (
           <div className="flex-shrink-0 px-2 py-4 border-b border-gray-700">
             <ServerStatusIndicator
               onSelectProject={handleSelectProject}
@@ -189,78 +189,6 @@ export default function Sidebar() {
               selectedProjectId={selectedProject?.id}
               selectedSlotId={selectedSlot?.slotId}
             />
-          </div>
-        )}
-
-        {/* Group A: Server-only items - only visible on Servers tab */}
-        {isServersPage && (
-          <div className="px-2 py-2 space-y-1 border-b border-gray-700">
-            <Link
-              href="/servers/tradelines"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === '/servers/tradelines'
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>⚡</span>
-              <span>NextBid Engine</span>
-            </Link>
-            <Link
-              href="/servers/nextsource"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === '/servers/nextsource'
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>🔍</span>
-              <span>NextSource</span>
-            </Link>
-            <Link
-              href="/servers/nextbidder"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === '/servers/nextbidder'
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>🎯</span>
-              <span>NextBidder</span>
-            </Link>
-            <Link
-              href="/servers/portal"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === '/servers/portal'
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>🌐</span>
-              <span>NextBid Portal</span>
-            </Link>
-            <Link
-              href="/servers/nexttech"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === '/servers/nexttech'
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>🔧</span>
-              <span>NextTech</span>
-            </Link>
-            <Link
-              href="/servers/nexttask"
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === '/servers/nexttask'
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              <span>✅</span>
-              <span>NextTask</span>
-            </Link>
           </div>
         )}
 
