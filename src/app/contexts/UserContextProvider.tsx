@@ -33,10 +33,15 @@ interface UserContextValue {
   isLoading: boolean;
   hasActiveContext: boolean;
 
+  // Previous work mode (PROJECT or SUPPORT) - for returning from Forge/Planning
+  previousWorkMode: { mode: ContextMode; projectId?: string; projectSlug?: string } | null;
+
   // Actions
   fetchContext: () => Promise<void>;
   setContext: (params: SetContextParams) => Promise<boolean>;
   flipContext: (mode: ContextMode, projectId?: string, projectSlug?: string, devTeam?: string) => Promise<boolean>;
+  returnToPreviousWorkMode: () => Promise<boolean>;
+  flipToSupportIfNeeded: () => Promise<boolean>;
   endContext: () => Promise<void>;
 
   // User identity (set on login)
@@ -57,9 +62,12 @@ const UserContextContext = createContext<UserContextValue>({
   context: null,
   isLoading: true,
   hasActiveContext: false,
+  previousWorkMode: null,
   fetchContext: async () => {},
   setContext: async () => false,
   flipContext: async () => false,
+  returnToPreviousWorkMode: async () => false,
+  flipToSupportIfNeeded: async () => false,
   endContext: async () => {},
   userId: null,
   pcTag: null,
@@ -71,8 +79,20 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [pcTag, setPcTag] = useState<string | null>(null);
+  const [previousWorkMode, setPreviousWorkMode] = useState<{ mode: ContextMode; projectId?: string; projectSlug?: string } | null>(null);
 
   const hasActiveContext = !!context;
+
+  // Track previous work mode (PROJECT or SUPPORT) when switching to Forge/Planning
+  useEffect(() => {
+    if (context && (context.mode === 'project' || context.mode === 'support')) {
+      setPreviousWorkMode({
+        mode: context.mode,
+        projectId: context.project_id || undefined,
+        projectSlug: context.project_slug || undefined,
+      });
+    }
+  }, [context]);
 
   const setUserIdentity = useCallback((newUserId: string, newPcTag: string) => {
     setUserId(newUserId);
@@ -146,6 +166,44 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     });
   }, [setContext]);
 
+  // Return to previous work mode (PROJECT or SUPPORT) when leaving Forge/Planning
+  const returnToPreviousWorkMode = useCallback(async (): Promise<boolean> => {
+    if (previousWorkMode) {
+      return setContext({
+        mode: previousWorkMode.mode,
+        project_id: previousWorkMode.projectId || null,
+        project_slug: previousWorkMode.projectSlug || null,
+        source: 'autoflip',
+      });
+    }
+    // Fallback to SUPPORT if no previous work mode
+    return setContext({
+      mode: 'support',
+      source: 'autoflip',
+    });
+  }, [previousWorkMode, setContext]);
+
+  // Flip to SUPPORT if currently in OTHER, FORGE, or PLANNING (for sidebar work tabs)
+  const flipToSupportIfNeeded = useCallback(async (): Promise<boolean> => {
+    if (!context) return false;
+
+    // If already in PROJECT or SUPPORT, no flip needed
+    if (context.mode === 'project' || context.mode === 'support') {
+      return true;
+    }
+
+    // If in FORGE or PLANNING, return to previous work mode
+    if (context.mode === 'forge' || context.mode === 'planning') {
+      return returnToPreviousWorkMode();
+    }
+
+    // If in OTHER, flip to SUPPORT
+    return setContext({
+      mode: 'support',
+      source: 'autoflip',
+    });
+  }, [context, returnToPreviousWorkMode, setContext]);
+
   const endContext = useCallback(async () => {
     if (!userId || !pcTag) return;
 
@@ -176,9 +234,12 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
       context,
       isLoading,
       hasActiveContext,
+      previousWorkMode,
       fetchContext,
       setContext,
       flipContext,
+      returnToPreviousWorkMode,
+      flipToSupportIfNeeded,
       endContext,
       userId,
       pcTag,

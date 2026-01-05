@@ -31,11 +31,11 @@ export default function ContextExitPopup({ onClose, onContextSet }: ContextExitP
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch projects
+  // Fetch parent projects only
   useEffect(() => {
     async function fetchProjects() {
       try {
-        const res = await fetch('/api/projects');
+        const res = await fetch('/api/projects?parents_only=true');
         const data = await res.json();
         if (data.success && data.projects) {
           setProjects(data.projects);
