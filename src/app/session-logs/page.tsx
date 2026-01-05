@@ -749,9 +749,9 @@ function SessionItem({ session }: { session: Session }) {
       <div className="flex items-center justify-between mt-1">
         <span className="text-xs text-gray-400 truncate">
           {session.project_slug
-            ? `[USER] ${session.project_slug.toUpperCase()}`
+            ? `${(session.user_name || 'MICHAEL').toUpperCase()} - ${session.project_slug.toUpperCase()}`
             : session.mode
-              ? `[USER] ${session.mode.toUpperCase()}`
+              ? `${(session.user_name || 'MICHAEL').toUpperCase()} - ${session.mode.toUpperCase()}`
               : session.project_path || displaySourceName(session.source_name)}
         </span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColors[session.status || 'captured'] || statusColors.captured}`}>
