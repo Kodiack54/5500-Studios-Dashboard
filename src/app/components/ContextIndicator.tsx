@@ -106,13 +106,15 @@ export default function ContextIndicator() {
 
   return (
     <div ref={dropdownRef} className="relative">
-      {/* Main button */}
+      {/* Main button - blue base with mode-colored ring */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`h-10 flex items-center gap-2 px-3 rounded-xl text-sm border transition-colors ${
-          isSystemTab
-            ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-            : 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600'
+        className={`h-10 flex items-center gap-2 px-3 rounded-xl text-sm border-2 transition-colors bg-blue-500/20 text-white hover:bg-blue-500/30 ${
+          resolvedMode === 'project' ? 'border-blue-500/60' :
+          resolvedMode === 'support' ? 'border-green-500/60' :
+          resolvedMode === 'forge' ? 'border-orange-500/60' :
+          resolvedMode === 'planning' ? 'border-purple-500/60' :
+          'border-gray-500/60'
         }`}
       >
         {/* Project name */}
