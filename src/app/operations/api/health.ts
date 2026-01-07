@@ -39,18 +39,34 @@ async function pingHealthEndpoint(service: StudioService): Promise<{ ok: boolean
 }
 
 /**
- * Get PM2 status for all services via SSH command execution
- * This returns mocked data for now - needs server-side PM2 endpoint
+ * Get PM2 status for all services by executing pm2 jlist directly
+ * This runs server-side on the droplet where PM2 is installed
  */
 async function getPM2Status(): Promise<Record<string, { status: string; cpu?: number; memory?: number; uptime?: number }>> {
-  // TODO: Implement real PM2 status fetch
-  // Options:
-  // 1. Create a PM2 status endpoint on the server (e.g., on router-9500)
-  // 2. Use SSH via a server-side script
-  // 3. Use PM2 API if available
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
 
-  // For now, we'll derive status from health endpoint pings
-  return {};
+    const { stdout } = await execAsync('pm2 jlist', { timeout: 5000 });
+    const processes = JSON.parse(stdout);
+
+    const status: Record<string, { status: string; cpu?: number; memory?: number; uptime?: number }> = {};
+
+    for (const proc of processes) {
+      status[proc.name] = {
+        status: proc.pm2_env?.status || 'unknown',
+        cpu: proc.monit?.cpu || 0,
+        memory: proc.monit?.memory || 0,
+        uptime: proc.pm2_env?.pm_uptime || 0,
+      };
+    }
+
+    return status;
+  } catch (error) {
+    console.error('[Operations Health] PM2 status fetch failed:', error);
+    return {};
+  }
 }
 
 /**

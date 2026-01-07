@@ -2,38 +2,31 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getPipelineServices, getAITeamServices, StudioService } from '../config';
-import { FeedEvent } from '../lib/types';
 
 type TabGroup = 'pipeline' | 'ai_team';
+
+interface FeedEvent {
+  id: string;
+  serviceId: string;
+  eventType: string;
+  message: string;
+  timestamp: string;
+  details?: Record<string, unknown>;
+}
 
 interface StudioLiveFeedProps {
   selectedServiceId?: string | null;
   onServiceSelect?: (serviceId: string) => void;
 }
 
-// Simulated feed events (will be replaced with real 9500 feed)
-function generateMockEvent(services: StudioService[]): FeedEvent {
-  const service = services[Math.floor(Math.random() * services.length)];
-  const types: FeedEvent['type'][] = ['emit', 'receive', 'process', 'write'];
-  const messages = [
-    'Session packet received',
-    'Context flip processed',
-    'Heartbeat logged',
-    'Transcript chunk ingested',
-    'Worklog entry created',
-    'Knowledge item indexed',
-    'Todo extracted',
-    'Structure updated',
-  ];
-
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    serviceId: service.id,
-    type: types[Math.floor(Math.random() * types.length)],
-    message: messages[Math.floor(Math.random() * messages.length)],
-    timestamp: Date.now(),
-  };
-}
+// Map event types to display badges
+const eventTypeBadges: Record<string, string> = {
+  context_flip: 'bg-purple-500/20 text-purple-400',
+  context_heartbeat: 'bg-green-500/20 text-green-400',
+  pc_dump_sent: 'bg-blue-500/20 text-blue-400',
+  terminal_dump_sent: 'bg-cyan-500/20 text-cyan-400',
+  transcript_received: 'bg-yellow-500/20 text-yellow-400',
+};
 
 export default function StudioLiveFeed({
   selectedServiceId,
@@ -43,7 +36,10 @@ export default function StudioLiveFeed({
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [paused, setPaused] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastFetchRef = useRef<string | null>(null);
 
   const pipelineServices = getPipelineServices();
   const aiTeamServices = getAITeamServices();
@@ -59,17 +55,48 @@ export default function StudioLiveFeed({
     return event.serviceId === activeFilter;
   });
 
-  // TODO: Replace with real WebSocket/SSE connection to 9500
+  // Fetch real events from API
+  const fetchEvents = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (lastFetchRef.current) {
+        params.set('since', lastFetchRef.current);
+      }
+      params.set('limit', '100');
+
+      const res = await fetch(`/api/operations/feed?${params}`);
+      const data = await res.json();
+
+      if (data.success && data.events.length > 0) {
+        setEvents(prev => {
+          // Merge new events, avoiding duplicates
+          const existingIds = new Set(prev.map(e => e.id));
+          const newEvents = data.events.filter((e: FeedEvent) => !existingIds.has(e.id));
+          const merged = [...prev, ...newEvents];
+          // Keep only last 200 events
+          return merged.slice(-200);
+        });
+
+        // Update last fetch time to most recent event
+        if (data.events.length > 0) {
+          lastFetchRef.current = data.events[0].timestamp;
+        }
+        setError(null);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch and polling
   useEffect(() => {
+    fetchEvents();
+
     if (paused) return;
 
-    // Simulate incoming events for demo
-    const interval = setInterval(() => {
-      const allServices = [...pipelineServices, ...aiTeamServices];
-      const newEvent = generateMockEvent(allServices);
-      setEvents(prev => [...prev.slice(-99), newEvent]);
-    }, 2000);
-
+    const interval = setInterval(fetchEvents, 5000); // Poll every 5 seconds
     return () => clearInterval(interval);
   }, [paused]);
 
@@ -95,7 +122,7 @@ export default function StudioLiveFeed({
     }
   }, [selectedServiceId]);
 
-  const formatTime = (timestamp: number) => {
+  const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
@@ -103,12 +130,19 @@ export default function StudioLiveFeed({
     });
   };
 
-  const typeBadges: Record<FeedEvent['type'], string> = {
-    emit: 'bg-purple-500/20 text-purple-400',
-    receive: 'bg-blue-500/20 text-blue-400',
-    process: 'bg-cyan-500/20 text-cyan-400',
-    write: 'bg-green-500/20 text-green-400',
-    error: 'bg-red-500/20 text-red-400',
+  const getEventBadge = (eventType: string) => {
+    return eventTypeBadges[eventType] || 'bg-gray-500/20 text-gray-400';
+  };
+
+  const getEventLabel = (eventType: string) => {
+    const labels: Record<string, string> = {
+      context_flip: 'FLIP',
+      context_heartbeat: 'BEAT',
+      pc_dump_sent: 'DUMP',
+      terminal_dump_sent: 'DUMP',
+      transcript_received: 'RECV',
+    };
+    return labels[eventType] || eventType.toUpperCase();
   };
 
   return (
@@ -192,9 +226,18 @@ export default function StudioLiveFeed({
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-2 font-mono text-xs space-y-1"
       >
-        {filteredEvents.length === 0 ? (
+        {error && (
+          <div className="text-red-400 text-center py-2 bg-red-500/10 rounded">
+            Error: {error}
+          </div>
+        )}
+        {loading && events.length === 0 ? (
           <div className="text-gray-500 text-center py-8">
-            {paused ? 'Feed paused' : 'Waiting for events...'}
+            Loading events...
+          </div>
+        ) : filteredEvents.length === 0 ? (
+          <div className="text-gray-500 text-center py-8">
+            {paused ? 'Feed paused' : 'No events yet - waiting for activity...'}
           </div>
         ) : (
           filteredEvents.map(event => {
@@ -211,11 +254,9 @@ export default function StudioLiveFeed({
                   {formatTime(event.timestamp)}
                 </span>
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] uppercase flex-shrink-0 ${
-                    typeBadges[event.type]
-                  }`}
+                  className={`px-1.5 py-0.5 rounded text-[10px] uppercase flex-shrink-0 ${getEventBadge(event.eventType)}`}
                 >
-                  {event.type}
+                  {getEventLabel(event.eventType)}
                 </span>
                 <span className="text-cyan-400 flex-shrink-0">
                   [{service?.label || event.serviceId}]
