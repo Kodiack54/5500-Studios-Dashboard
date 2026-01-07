@@ -134,21 +134,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate: project mode requires project_id
+    // Context Contract v1.0: Project is sticky, mode is fluid
+    // - project_id can be set for ANY mode (planning/support/forge all track effective project)
+    // - project mode requires project_id (can't be "project mode" without a project)
+    // - support/planning/forge can have project_id (sticky project or Studios Platform)
     if (mode === 'project' && !project_id) {
       return NextResponse.json(
         { success: false, error: 'project_id required when mode=project' },
         { status: 400 }
       );
     }
-
-    // Validate: non-project modes must NOT have project_id
-    if (mode !== 'project' && project_id) {
-      return NextResponse.json(
-        { success: false, error: `project_id must be null when mode=${mode}` },
-        { status: 400 }
-      );
-    }
+    // Note: non-project modes CAN have project_id (effective project stays)
 
     // Heartbeats are append-only - don't modify previous contexts
     // Flips use debounce logic to clean up short contexts
@@ -202,9 +198,9 @@ export async function POST(request: NextRequest) {
         pc_tag,
         pc_tag_raw || 'dashboard',  // Default to 'dashboard' if not specified
         mode,
-        mode === 'project' ? project_id : null,
-        mode === 'project' ? (project_slug || null) : null,
-        mode === 'project' ? (project_name || null) : null,
+        project_id || null,        // Context Contract: project is sticky for ALL modes
+        project_slug || null,      // planning/support/forge all track effective project
+        project_name || null,
         dev_team || null,
         source,
         event_type,
