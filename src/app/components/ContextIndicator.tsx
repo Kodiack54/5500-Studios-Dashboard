@@ -91,8 +91,9 @@ export default function ContextIndicator() {
 
   const Icon = MODE_ICONS[resolvedMode] || Code2;
 
-  // Display name for current selection
-  const displayName = effectiveProject?.name || 'Select Project';
+  // Display name for current selection (show stickyProject, not effectiveProject)
+  // On system tabs, effectiveProject is forced to Studios Platform, but we show stickyProject
+  const displayName = stickyProject?.name || 'Select Project';
 
   if (isLoading) {
     return (
