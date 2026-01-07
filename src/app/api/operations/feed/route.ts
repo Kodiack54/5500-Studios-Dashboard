@@ -86,12 +86,12 @@ export async function GET(request: Request) {
         eventType = 'pc_dump_sent';
       }
 
-      // Also add a corresponding receipt event for 9500
+      // Source service sends dump
       events.push({
         id: `${row.id}-source`,
         serviceId: sourceService,
         eventType: eventType,
-        message: `Transcript dump → 9500 (${row.project_slug || 'unknown'})`,
+        message: `Dump sent → 9500 (${row.project_slug || 'unknown'})`,
         timestamp: new Date(row.received_at).toISOString(),
         details: {
           project: row.project_slug,
@@ -99,11 +99,12 @@ export async function GET(request: Request) {
         },
       });
 
+      // 9500 receives the transcript
       events.push({
         id: `${row.id}-receipt`,
         serviceId: 'router-9500',
         eventType: 'transcript_received',
-        message: `Received from ${sourceService}: ${row.project_slug || 'unknown'}`,
+        message: `Transcript received from ${sourceService}: ${row.project_slug || 'unknown'}`,
         timestamp: new Date(row.received_at).toISOString(),
         details: {
           source: sourceService,
