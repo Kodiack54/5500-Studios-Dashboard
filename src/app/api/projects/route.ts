@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
 
     // Filter out system/placeholder projects (Unrouted, Unassigned)
     const SYSTEM_SLUGS = ['unrouted', 'unassigned', 'system-unrouted', 'terminal-unrouted'];
-    const filtered = (data || []).filter((p: { slug?: string; name?: string }) => {
+    const projects = data as Array<{ slug?: string; name?: string; id: string }> || [];
+    const filtered = projects.filter((p) => {
       const slug = (p.slug || '').toLowerCase();
       const name = (p.name || '').toLowerCase();
       return !SYSTEM_SLUGS.some(s => slug.includes(s)) &&
