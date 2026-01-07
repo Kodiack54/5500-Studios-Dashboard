@@ -142,6 +142,9 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     mode: 'project',
   });
 
+  // Ref for userId so heartbeat can access it without effect dependency
+  const userIdRef = useRef<string | null>(null);
+
   // Refs for heartbeat to access current values without causing effect re-runs
   const heartbeatDataRef = useRef<{
     effectiveProject: StickyProject | null;
@@ -436,8 +439,9 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, effectiveProject, resolvedMode, isSystemTab, pathname, stickyProject, setContext]);
 
-  // Keep heartbeat ref in sync (runs every render, no deps)
+  // Keep refs in sync (runs every render, no deps)
   useEffect(() => {
+    userIdRef.current = userId;
     heartbeatDataRef.current = {
       effectiveProject,
       resolvedMode,
@@ -447,55 +451,64 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     };
   });
 
-  // Context Contract v1.0: Heartbeat every 2 minutes (stable interval)
-  // Only depends on userId - doesn't reset on navigation
+  // Context Contract v1.0: Heartbeat - bulletproof unconditional interval
+  // Ticks every 30s, sends only if 2+ minutes since last write
+  // Uses refs for all values - NO dependencies
   useEffect(() => {
-    if (!userId) return;
+    console.log('[UserContext] Heartbeat effect mounted');
 
-    const heartbeatInterval = setInterval(() => {
+    const heartbeatInterval = window.setInterval(() => {
+      const currentUserId = userIdRef.current;
       const elapsed = Date.now() - lastWriteRef.current.time;
 
-      // Only write heartbeat if last write is older than 2 minutes
-      if (elapsed >= HEARTBEAT_INTERVAL) {
-        const data = heartbeatDataRef.current;
-        console.log('[UserContext] Heartbeat firing', {
-          elapsed: Math.round(elapsed / 1000),
+      console.log('[UserContext] Heartbeat tick', {
+        userId: currentUserId ? 'set' : 'null',
+        hidden: document.hidden,
+        elapsed: Math.round(elapsed / 1000),
+      });
+
+      // Skip if no user, tab hidden, or recent write
+      if (!currentUserId) return;
+      if (document.hidden) return;
+      if (elapsed < HEARTBEAT_INTERVAL) return;
+
+      const data = heartbeatDataRef.current;
+      console.log('[UserContext] Heartbeat firing', {
+        mode: data.resolvedMode,
+        project: data.effectiveProject?.slug,
+      });
+
+      // Use fetch directly - refs for all values
+      fetch('/api/context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUserId,
+          pc_tag_raw: 'dashboard',
           mode: data.resolvedMode,
-          project: data.effectiveProject?.slug,
-        });
+          project_id: data.effectiveProject?.id || null,
+          project_slug: data.effectiveProject?.slug || null,
+          project_name: data.effectiveProject?.name || null,
+          source: 'autoflip',
+          event_type: 'heartbeat',
+          meta: {
+            route: data.pathname,
+            isSystemTab: data.isSystemTab,
+            stickyProjectId: data.stickyProject?.id || null,
+          },
+        }),
+      }).then(res => res.json()).then(result => {
+        if (result.success) {
+          lastWriteRef.current.time = Date.now();
+          console.log('[UserContext] Heartbeat written successfully');
+        }
+      }).catch(err => {
+        console.error('[UserContext] Heartbeat failed:', err);
+      });
+    }, 30_000); // Tick every 30 seconds
 
-        // Use fetch directly to avoid setContext dependency
-        fetch('/api/context', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: userId,
-            pc_tag_raw: 'dashboard',
-            mode: data.resolvedMode,
-            project_id: data.effectiveProject?.id || null,
-            project_slug: data.effectiveProject?.slug || null,
-            project_name: data.effectiveProject?.name || null,
-            source: 'autoflip',
-            event_type: 'heartbeat',
-            meta: {
-              route: data.pathname,
-              isSystemTab: data.isSystemTab,
-              stickyProjectId: data.stickyProject?.id || null,
-            },
-          }),
-        }).then(res => res.json()).then(result => {
-          if (result.success) {
-            lastWriteRef.current.time = Date.now();
-            console.log('[UserContext] Heartbeat written');
-          }
-        }).catch(err => {
-          console.error('[UserContext] Heartbeat failed:', err);
-        });
-      }
-    }, HEARTBEAT_INTERVAL);
-
-    return () => clearInterval(heartbeatInterval);
-  }, [userId]); // Only userId - stable after login
+    return () => window.clearInterval(heartbeatInterval);
+  }, []); // NO dependencies - unconditional interval
 
   // Fetch context when user identity is set
   useEffect(() => {
