@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Activity, Cpu, Server, Bot } from 'lucide-react';
+import { ChevronDown, ChevronRight, Server, Bot } from 'lucide-react';
 import { StudioService, getPipelineServices, getAITeamServices, STATUS_COLORS } from '../config';
 import { ServiceHealth } from '../lib/types';
+import { getUser } from '@/lib/auth-client';
 
 interface OperationsStatusIndicatorProps {
   onSelectService: (service: StudioService) => void;
@@ -15,12 +16,21 @@ export default function OperationsStatusIndicator({
   selectedServiceId,
 }: OperationsStatusIndicatorProps) {
   const [healthData, setHealthData] = useState<Record<string, ServiceHealth>>({});
-  const [expandPipeline, setExpandPipeline] = useState(true);
-  const [expandAITeam, setExpandAITeam] = useState(true);
+  const [expandPipeline, setExpandPipeline] = useState(false);
+  const [expandAITeam, setExpandAITeam] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState<string>('User PC');
 
   const pipelineServices = getPipelineServices();
   const aiTeamServices = getAITeamServices();
+
+  // Get username from auth cookie
+  useEffect(() => {
+    const user = getUser();
+    if (user?.name) {
+      setUserName(user.name);
+    }
+  }, []);
 
   // Fetch health data
   useEffect(() => {
@@ -79,6 +89,9 @@ export default function OperationsStatusIndicator({
     const status = health?.status || 'unknown';
     const isSelected = selectedServiceId === service.id;
 
+    // Use actual username for user-pc
+    const displayLabel = service.id === 'user-pc' ? userName : service.label;
+
     return (
       <button
         key={service.id}
@@ -94,7 +107,7 @@ export default function OperationsStatusIndicator({
           style={{ backgroundColor: getStatusColor(status) }}
         />
         <span className={`flex-1 text-left truncate ${isSelected ? 'text-white' : 'text-gray-400'}`}>
-          {service.label}
+          {displayLabel}
         </span>
         {service.port && (
           <span className="text-gray-600 text-[10px]">:{service.port}</span>

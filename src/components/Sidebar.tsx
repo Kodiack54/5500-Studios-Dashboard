@@ -211,15 +211,13 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* Operations Section - Only on Operations tab */}
-        {isOperationsPage && (
-          <div className="flex-shrink-0 px-2 py-4 border-b border-gray-700">
-            <OperationsStatusIndicator
-              onSelectService={handleSelectOpsService}
-              selectedServiceId={selectedOpsService?.id}
-            />
-          </div>
-        )}
+        {/* Operations Section - Always visible (like Forge/Roadmap) */}
+        <div className="flex-shrink-0 px-2 py-4 border-b border-gray-700">
+          <OperationsStatusIndicator
+            onSelectService={handleSelectOpsService}
+            selectedServiceId={selectedOpsService?.id}
+          />
+        </div>
 
         {/* Group C: Always visible (projectless buckets) */}
         <div className="px-2 py-2 space-y-1 border-b border-gray-700">
