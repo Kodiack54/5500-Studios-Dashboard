@@ -511,31 +511,39 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
       });
 
       // Use fetch directly - refs for all values
+      const payload = {
+        user_id: currentUserId,
+        pc_tag_raw: 'dashboard',
+        mode: data.resolvedMode,
+        project_id: data.effectiveProject?.id || null,
+        project_slug: data.effectiveProject?.slug || null,
+        project_name: data.effectiveProject?.name || null,
+        source: 'autoflip',
+        event_type: 'heartbeat',
+        meta: {
+          route: data.pathname,
+          isSystemTab: data.isSystemTab,
+          stickyProjectId: data.stickyProject?.id || null,
+          client_ts: Date.now(),
+        },
+      };
+      console.log('[UserContext] Heartbeat sending payload:', payload);
+
       fetch('/api/context', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: currentUserId,
-          pc_tag_raw: 'dashboard',
-          mode: data.resolvedMode,
-          project_id: data.effectiveProject?.id || null,
-          project_slug: data.effectiveProject?.slug || null,
-          project_name: data.effectiveProject?.name || null,
-          source: 'autoflip',
-          event_type: 'heartbeat',
-          meta: {
-            route: data.pathname,
-            isSystemTab: data.isSystemTab,
-            stickyProjectId: data.stickyProject?.id || null,
-          },
-        }),
-      }).then(res => res.json()).then(result => {
+        body: JSON.stringify(payload),
+      }).then(async res => {
+        const result = await res.json();
+        console.log('[UserContext] Heartbeat response:', { status: res.status, result });
         if (result.success) {
           lastWriteRef.current.time = Date.now();
           console.log('[UserContext] Heartbeat written successfully');
+        } else {
+          console.error('[UserContext] Heartbeat API error:', result.error);
         }
       }).catch(err => {
-        console.error('[UserContext] Heartbeat failed:', err);
+        console.error('[UserContext] Heartbeat fetch failed:', err);
       });
     }, 30_000); // Tick every 30 seconds
 
