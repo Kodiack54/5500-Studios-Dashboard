@@ -24,9 +24,10 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
   const { showServers, toggleServers } = useContext(ProductionStatusContext);
 
   // Tab navigation - exactly like MyKeystone style
-  // Tabs: Servers / Dev Tools / HelpDesk / Calendar / Development
+  // Tabs: Servers / Operations / Dev Tools / HelpDesk / Calendar / Development
   const tabs = [
     { id: 'servers', label: 'Servers', path: '/servers/tradelines' },
+    { id: 'operations', label: 'Operations', path: '/operations' },
     { id: 'dev-tools', label: 'Dev Tools', path: '/dev-controls' },
     { id: 'helpdesk', label: 'HelpDesk', path: '/helpdesk' },
     { id: 'calendar', label: 'Calendar', path: '/calendar' },
@@ -36,6 +37,7 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
   const getActiveTab = () => {
     if (pathname?.startsWith('/servers')) return 'servers';
     if (pathname?.startsWith('/credentials')) return 'servers'; // Credentials is under servers tab
+    if (pathname?.startsWith('/operations')) return 'operations';
     if (pathname?.startsWith('/dev-controls')) return 'dev-tools';
     if (pathname?.startsWith('/helpdesk')) return 'helpdesk';
     if (pathname?.startsWith('/calendar')) return 'calendar';
@@ -173,6 +175,7 @@ export default function Navigation({ pageTitle, pageActions }: NavigationProps) 
                       {activeTab === '' && 'Dashboard'}
                       {activeTab === 'servers' && !isCredentialsPage && 'Server Management'}
                       {isCredentialsPage && 'Credentials & Sources'}
+                      {activeTab === 'operations' && 'Operations'}
                       {activeTab === 'dev-tools' && 'Development Tools'}
                       {activeTab === 'helpdesk' && 'Support Center'}
                       {activeTab === 'calendar' && 'Team Schedule'}
