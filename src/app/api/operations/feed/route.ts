@@ -115,7 +115,7 @@ export async function GET(request: Request) {
         id: `${row.id}-source`,
         serviceId: sourceService,
         eventType: eventType,
-        message: `Dump sent → 9500 (${row.project_slug || 'unknown'})${traceLabel}`,
+        message: `Transcript sent → 9500 (${row.project_slug || 'unknown'})${traceLabel}`,
         timestamp: new Date(row.received_at).toISOString(),
         details: {
           project: row.project_slug,
