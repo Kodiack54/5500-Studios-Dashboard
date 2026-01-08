@@ -86,7 +86,7 @@ export async function GET(request: Request) {
 
     // Query 2: Transcript dumps from PC and terminal to 9500
     const transcriptQuery = `
-      SELECT id, source_type, pc_tag, project_slug, received_at
+      SELECT id, source_type, pc_tag, project_slug, received_at, trace_id
       FROM dev_transcripts_raw
       WHERE received_at > $1
       ORDER BY received_at DESC
@@ -107,16 +107,20 @@ export async function GET(request: Request) {
         eventType = 'pc_dump_sent';
       }
 
+      const traceId = row.trace_id;
+      const traceLabel = traceId ? ` [${traceId.slice(-6)}]` : '';
+
       // Source service sends dump
       events.push({
         id: `${row.id}-source`,
         serviceId: sourceService,
         eventType: eventType,
-        message: `Dump sent → 9500 (${row.project_slug || 'unknown'})`,
+        message: `Dump sent → 9500 (${row.project_slug || 'unknown'})${traceLabel}`,
         timestamp: new Date(row.received_at).toISOString(),
         details: {
           project: row.project_slug,
           pcTag: row.pc_tag,
+          traceId: traceId,
         },
       });
 
@@ -125,12 +129,13 @@ export async function GET(request: Request) {
         id: `${row.id}-receipt`,
         serviceId: 'router-9500',
         eventType: 'transcript_received',
-        message: `Transcript received from ${sourceService}: ${row.project_slug || 'unknown'}`,
+        message: `Transcript received from ${sourceService}: ${row.project_slug || 'unknown'}${traceLabel}`,
         timestamp: new Date(row.received_at).toISOString(),
         details: {
           source: sourceService,
           project: row.project_slug,
           pcTag: row.pc_tag,
+          traceId: traceId,
         },
       });
     }
