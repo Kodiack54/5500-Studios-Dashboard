@@ -327,106 +327,6 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     }
   }, [context]);
 
-  // Forge/Planning enter/exit: Save work context on enter, restore + emit flip on exit
-  // Uses pathname-based detection for reliable route transitions
-  // Only depends on pathname and userId to avoid re-trigger loops
-  useEffect(() => {
-    if (!pathname || !userId) return;
-
-    const prevPath = prevPathnameRef.current;
-    const wasForge = prevPath && FORGE_ROUTES.some(r => prevPath.startsWith(r));
-    const wasPlanning = prevPath && PLANNING_ROUTES.some(r => prevPath.startsWith(r));
-    const wasForced = wasForge || wasPlanning;
-
-    const isForge = FORGE_ROUTES.some(r => pathname.startsWith(r));
-    const isPlanning = PLANNING_ROUTES.some(r => pathname.startsWith(r));
-    const isForced = isForge || isPlanning;
-
-    // DEBUG: Log every pathname transition
-    console.log('[UserContext] Restore effect - pathname transition:', {
-      prevPath,
-      pathname,
-      wasForced,
-      isForced,
-      savedContext: savedWorkContextRef.current,
-    });
-
-    // ENTERING Forge/Planning from non-forced route
-    if (isForced && !wasForced && prevPath !== null) {
-      // Save current work context before entering forced mode
-      // Read stickyProject from current state at this moment
-      const currentProject = stickyProject;
-      const currentMode = currentProject ? 'project' : 'support';
-
-      savedWorkContextRef.current = {
-        mode: currentMode,
-        project: currentProject,
-      };
-
-      console.log('[UserContext] ENTERING forced mode - saved:', {
-        mode: currentMode,
-        project: currentProject?.slug,
-        entering: isForge ? 'forge' : 'planning',
-      });
-    }
-
-    // LEAVING Forge/Planning to non-forced route
-    if (wasForced && !isForced) {
-      const saved = savedWorkContextRef.current;
-      const restoreMode = saved?.mode || 'support';
-      const restoreProject = saved?.project || null;
-
-      console.log('[UserContext] LEAVING forced mode - restoring:', {
-        mode: restoreMode,
-        project: restoreProject?.slug,
-        exited: wasForge ? 'forge' : 'planning',
-      });
-
-      // Set guard to prevent immediate override
-      justRestoredRef.current = Date.now();
-
-      // Update lastWriteRef SYNCHRONOUSLY before async setContext
-      lastWriteRef.current = {
-        time: Date.now(),
-        projectId: restoreProject?.id || null,
-        mode: restoreMode,
-      };
-
-      // Update heartbeatDataRef to ensure heartbeat uses correct values immediately
-      heartbeatDataRef.current = {
-        ...heartbeatDataRef.current,
-        effectiveProject: restoreProject,
-        resolvedMode: restoreMode,
-        stickyProject: restoreProject,
-      };
-
-      // Restore sticky project state
-      if (restoreProject) {
-        setStickyProjectState(restoreProject);
-      }
-
-      // Emit explicit context_flip for restore
-      setContext({
-        mode: restoreMode,
-        project_id: restoreProject?.id || null,
-        project_slug: restoreProject?.slug || null,
-        project_name: restoreProject?.name || null,
-        source: 'autoflip',
-        event_type: 'flip',
-        meta: {
-          route: pathname,
-          restored_from: wasForge ? 'forge' : 'planning',
-          restore_flip: true,
-        },
-      });
-
-      // Clear saved context
-      savedWorkContextRef.current = null;
-    }
-
-    prevPathnameRef.current = pathname;
-  }, [pathname, userId, stickyProject, setContext]);
-
   const setUserIdentity = useCallback((newUserId: string, newPcTag: string) => {
     setUserId(newUserId);
     setPcTag(newPcTag);
@@ -499,6 +399,103 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, [userId, pathname]);
+
+  // Forge/Planning enter/exit: Save work context on enter, restore + emit flip on exit
+  // Uses pathname-based detection for reliable route transitions
+  useEffect(() => {
+    if (!pathname || !userId) return;
+
+    const prevPath = prevPathnameRef.current;
+    const wasForge = prevPath && FORGE_ROUTES.some(r => prevPath.startsWith(r));
+    const wasPlanning = prevPath && PLANNING_ROUTES.some(r => prevPath.startsWith(r));
+    const wasForced = wasForge || wasPlanning;
+
+    const isForge = FORGE_ROUTES.some(r => pathname.startsWith(r));
+    const isPlanning = PLANNING_ROUTES.some(r => pathname.startsWith(r));
+    const isForced = isForge || isPlanning;
+
+    // DEBUG: Log every pathname transition
+    console.log('[UserContext] Restore effect - pathname transition:', {
+      prevPath,
+      pathname,
+      wasForced,
+      isForced,
+      savedContext: savedWorkContextRef.current,
+    });
+
+    // ENTERING Forge/Planning from non-forced route
+    if (isForced && !wasForced && prevPath !== null) {
+      const currentProject = stickyProject;
+      const currentMode = currentProject ? 'project' : 'support';
+
+      savedWorkContextRef.current = {
+        mode: currentMode,
+        project: currentProject,
+      };
+
+      console.log('[UserContext] ENTERING forced mode - saved:', {
+        mode: currentMode,
+        project: currentProject?.slug,
+        entering: isForge ? 'forge' : 'planning',
+      });
+    }
+
+    // LEAVING Forge/Planning to non-forced route
+    if (wasForced && !isForced) {
+      const saved = savedWorkContextRef.current;
+      const restoreMode = saved?.mode || 'support';
+      const restoreProject = saved?.project || null;
+
+      console.log('[UserContext] LEAVING forced mode - restoring:', {
+        mode: restoreMode,
+        project: restoreProject?.slug,
+        exited: wasForge ? 'forge' : 'planning',
+      });
+
+      // Set guard to prevent immediate override
+      justRestoredRef.current = Date.now();
+
+      // Update lastWriteRef SYNCHRONOUSLY before async setContext
+      lastWriteRef.current = {
+        time: Date.now(),
+        projectId: restoreProject?.id || null,
+        mode: restoreMode,
+      };
+
+      // Update heartbeatDataRef to ensure heartbeat uses correct values immediately
+      heartbeatDataRef.current = {
+        ...heartbeatDataRef.current,
+        effectiveProject: restoreProject,
+        resolvedMode: restoreMode,
+        stickyProject: restoreProject,
+      };
+
+      // Restore sticky project state
+      if (restoreProject) {
+        setStickyProjectState(restoreProject);
+      }
+
+      // Emit explicit context_flip for restore
+      setContext({
+        mode: restoreMode,
+        project_id: restoreProject?.id || null,
+        project_slug: restoreProject?.slug || null,
+        project_name: restoreProject?.name || null,
+        source: 'autoflip',
+        event_type: 'flip',
+        meta: {
+          route: pathname,
+          restored_from: wasForge ? 'forge' : 'planning',
+          restore_flip: true,
+        },
+      });
+
+      // Clear saved context
+      savedWorkContextRef.current = null;
+    }
+
+    prevPathnameRef.current = pathname;
+  }, [pathname, userId, stickyProject, setContext]);
 
   // Convenience method for auto-flip (called by tab navigation hooks)
   const flipContext = useCallback(async (
