@@ -560,6 +560,12 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
       if (document.hidden) return;
       if (elapsed < HEARTBEAT_INTERVAL) return;
 
+      // Skip heartbeat writes on passive routes (Operations is read-only - never writes context)
+      if (data.pathname && PASSIVE_ROUTES.some(r => data.pathname.startsWith(r))) {
+        console.log('[UserContext] Heartbeat skipped - passive route:', data.pathname);
+        return;
+      }
+
       console.log('[UserContext] Heartbeat firing', {
         mode: data.resolvedMode,
         project: data.effectiveProject?.slug,
