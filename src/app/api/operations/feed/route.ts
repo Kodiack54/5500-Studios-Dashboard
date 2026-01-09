@@ -97,7 +97,7 @@ export async function GET(request: Request) {
       params.push(serviceFilter);
     }
 
-    query += ` ORDER BY timestamp DESC LIMIT $${params.length + 1}`;
+    query += ` ORDER BY timestamp ASC LIMIT $${params.length + 1}`;
     params.push(limit);
 
     const result = await pool.query(query, params);
