@@ -211,10 +211,22 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
   // Get current route for mode resolution
   const pathname = usePathname();
 
+  // Track last active mode for passive routes (preserves context when viewing operations, etc.)
+  const lastActiveModeRef = useRef<{ mode: ContextMode; project: StickyProject | null }>({
+    mode: 'support',
+    project: null,
+  });
+
   // Context Contract v1.0: Resolve mode from current route
   // Some routes force mode, others inherit (project if stickyProject set, else support)
+  // PASSIVE routes preserve whatever mode was active before navigating there
   const resolvedMode = useMemo((): ContextMode => {
     if (!pathname) return stickyProject ? 'project' : 'support';
+
+    // Passive routes preserve the last active mode (don't compute new mode)
+    if (PASSIVE_ROUTES.some(r => pathname.startsWith(r))) {
+      return lastActiveModeRef.current.mode;
+    }
 
     // Routes that force a specific mode
     if (PLANNING_ROUTES.some(r => pathname.startsWith(r))) return 'planning';
@@ -234,7 +246,12 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
 
   // Context Contract v1.0: Compute effective project
   // System tabs force Studios Platform, otherwise use sticky project
+  // PASSIVE routes preserve the project from before navigation
   const effectiveProject = useMemo((): StickyProject | null => {
+    // Passive routes preserve the last active project
+    if (pathname && PASSIVE_ROUTES.some(r => pathname.startsWith(r))) {
+      return lastActiveModeRef.current.project;
+    }
     if (isSystemTab) {
       return {
         id: STUDIOS_PLATFORM_ID,
@@ -243,7 +260,19 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
       };
     }
     return stickyProject;
-  }, [isSystemTab, stickyProject]);
+  }, [isSystemTab, stickyProject, pathname]);
+
+  // Update lastActiveModeRef when on non-passive routes (so passive routes can preserve it)
+  useEffect(() => {
+    if (!pathname) return;
+    const isPassive = PASSIVE_ROUTES.some(r => pathname.startsWith(r));
+    if (!isPassive) {
+      lastActiveModeRef.current = {
+        mode: resolvedMode,
+        project: effectiveProject,
+      };
+    }
+  }, [pathname, resolvedMode, effectiveProject]);
 
   // Track previous work mode (PROJECT or SUPPORT) when switching to Forge/Planning
   useEffect(() => {
