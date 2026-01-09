@@ -22,9 +22,15 @@ interface StudioLiveFeedProps {
 // Map event types to display badges
 const eventTypeBadges: Record<string, string> = {
   context_flip: 'bg-purple-500/20 text-purple-400',
-  context_heartbeat: 'bg-green-500/20 text-green-400',
-  pc_dump_sent: 'bg-blue-500/20 text-blue-400',
-  terminal_dump_sent: 'bg-cyan-500/20 text-cyan-400',
+  context_heartbeat: 'bg-blue-500/20 text-blue-400',
+  pc_heartbeat: 'bg-blue-500/20 text-blue-400',
+  pc_sender_heartbeat: 'bg-blue-500/20 text-blue-400',
+  external_claude_heartbeat: 'bg-blue-500/20 text-blue-400',
+  terminal_heartbeat: 'bg-blue-500/20 text-blue-400',
+  router_heartbeat: 'bg-blue-500/20 text-blue-400',
+  dashboard_process_heartbeat: 'bg-blue-500/20 text-blue-400',
+  pc_dump_sent: 'bg-green-500/20 text-green-400',
+  terminal_dump_sent: 'bg-green-500/20 text-green-400',
   transcript_received: 'bg-yellow-500/20 text-yellow-400',
 };
 
@@ -138,8 +144,14 @@ export default function StudioLiveFeed({
     const labels: Record<string, string> = {
       context_flip: 'FLIP',
       context_heartbeat: 'BEAT',
-      pc_dump_sent: 'DUMP',
-      terminal_dump_sent: 'DUMP',
+      pc_heartbeat: 'BEAT',
+      pc_sender_heartbeat: 'BEAT',
+      external_claude_heartbeat: 'BEAT',
+      terminal_heartbeat: 'BEAT',
+      router_heartbeat: 'BEAT',
+      dashboard_process_heartbeat: 'BEAT',
+      pc_dump_sent: 'SENT',
+      terminal_dump_sent: 'SENT',
       transcript_received: 'RECV',
     };
     return labels[eventType] || eventType.toUpperCase();

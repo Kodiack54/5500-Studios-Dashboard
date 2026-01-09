@@ -20,7 +20,7 @@ export interface StudioService {
 
 export const STUDIO_SERVICES: StudioService[] = [
   // Pipeline Group - ordered for sidebar display
-  { id: 'user-pc', label: 'User PC', type: 'pc_emitter', group: 'pipeline', description: 'Claude Code transcript dumps' },
+  { id: 'user-pc', label: 'External Claude', type: 'pc_emitter', group: 'pipeline', description: 'PC heartbeat + transcript dumps' },
   { id: 'terminal-5400', label: 'Terminal Server', type: 'pc_emitter', group: 'pipeline', port: 5400, pm2Name: 'terminal-server-5400', description: 'Server terminal + heartbeat' },
   { id: 'dashboard-5500', label: 'Dashboard', type: 'ui', group: 'pipeline', port: 5500, pm2Name: 'kodiack-dashboard-5500', description: 'Context flips + heartbeat' },
   { id: 'gateway-7000', label: 'Auth Gateway', type: 'gateway', group: 'pipeline', port: 7000, healthEndpoint: '/health', pm2Name: 'dev-auth-7000', description: 'Login + token auth' },

@@ -16,6 +16,7 @@ export interface ServiceHealth {
   uptime?: number;
   lastEventTime?: number;
   error?: string;
+  tailerWarning?: string;  // For user-pc: warning when heartbeat fresh but no transcripts
 }
 
 // All services health response

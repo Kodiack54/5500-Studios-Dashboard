@@ -72,9 +72,15 @@ export default function ServiceCard({
         </span>
       </div>
 
-      {/* Description */}
-      <div className="flex-1 text-xs text-gray-400 truncate">
-        {service.description}
+      {/* Description + Tailer Warning */}
+      <div className="flex-1 text-xs truncate">
+        {health?.tailerWarning ? (
+          <span className="text-yellow-400" title={health.tailerWarning}>
+            {health.tailerWarning}
+          </span>
+        ) : (
+          <span className="text-gray-400">{service.description}</span>
+        )}
       </div>
 
       {/* Resource Bars (if available) */}

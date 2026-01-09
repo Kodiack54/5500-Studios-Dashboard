@@ -76,14 +76,21 @@ function determineStatus(
   service: StudioService,
   healthPing: boolean,
   pm2Status?: string,
-  lastEventTime?: number
+  pcHealth?: { heartbeatTime?: number; transcriptTime?: number; idleSeconds?: number; status?: string }
 ): ServiceStatus {
-  // PC emitters WITHOUT PM2 (user-pc): check last event time from transcripts
+  // PC emitters WITHOUT PM2 (user-pc): check heartbeat from active-sessions
   if (service.type === 'pc_emitter' && !service.pm2Name) {
-    if (!lastEventTime) return 'unknown';
-    const minutesSince = (Date.now() - lastEventTime) / 60000;
-    if (minutesSince < 5) return 'online';
-    if (minutesSince < 30) return 'degraded';
+    // Use active-sessions status if available
+    if (pcHealth?.status) {
+      if (pcHealth.status === 'active') return 'online';
+      if (pcHealth.status === 'idle') return 'degraded';
+      return 'offline';
+    }
+    // Fallback to heartbeat time with thresholds: <120s = online, <300s = degraded, >=300s = offline
+    if (!pcHealth?.heartbeatTime) return 'unknown';
+    const secondsSince = (Date.now() - pcHealth.heartbeatTime) / 1000;
+    if (secondsSince < 120) return 'online';
+    if (secondsSince < 300) return 'degraded';
     return 'offline';
   }
 
@@ -107,10 +114,59 @@ function determineStatus(
 }
 
 /**
- * Get last event time for PC emitters from dev_ops_events (single source of truth)
+ * Get PC health from active-sessions and event times
+ * Returns heartbeat time (for online/offline) and transcript time (for tailer status)
  */
-async function getLastEventTimes(): Promise<Record<string, number>> {
+async function getPCHealth(): Promise<{
+  heartbeatTime?: number;
+  transcriptTime?: number;
+  idleSeconds?: number;
+  status?: string;
+}> {
   try {
+    // First try active-sessions for authoritative status
+    const sessionRes = await fetch(`http://${SERVER_HOST}:9200/v1/ops/active-sessions`, {
+      signal: AbortSignal.timeout(3000),
+    });
+
+    if (sessionRes.ok) {
+      const data = await sessionRes.json();
+      const pcSession = data.sessions?.find((s: any) => s.pc_tag === 'michael-premtech');
+
+      if (pcSession) {
+        // Get last transcript event time from ops events
+        const { Pool } = await import('pg');
+        const pool = new Pool({
+          host: process.env.PG_HOST || '161.35.229.220',
+          port: parseInt(process.env.PG_PORT || '9432'),
+          database: process.env.PG_DATABASE || 'kodiack_ai',
+          user: process.env.PG_USER || 'kodiack_admin',
+          password: process.env.PG_PASSWORD || 'K0d1ack_Pr0d_2025_Rx9',
+        });
+
+        const result = await pool.query(`
+          SELECT MAX(timestamp) as last_transcript
+          FROM dev_ops_events
+          WHERE service_id = 'user-pc'
+            AND event_type = 'pc_transcript_sent'
+            AND timestamp > NOW() - INTERVAL '1 hour'
+        `);
+        await pool.end();
+
+        const transcriptTime = result.rows[0]?.last_transcript
+          ? new Date(result.rows[0].last_transcript).getTime()
+          : undefined;
+
+        return {
+          heartbeatTime: Date.now() - (pcSession.idle_seconds * 1000),
+          transcriptTime,
+          idleSeconds: pcSession.idle_seconds,
+          status: pcSession.status,
+        };
+      }
+    }
+
+    // Fallback: query events directly
     const { Pool } = await import('pg');
     const pool = new Pool({
       host: process.env.PG_HOST || '161.35.229.220',
@@ -120,32 +176,28 @@ async function getLastEventTimes(): Promise<Record<string, number>> {
       password: process.env.PG_PASSWORD || 'K0d1ack_Pr0d_2025_Rx9',
     });
 
-    // Get last event for user-pc from dev_ops_events
-    // Check for pc_transcript_sent OR transcript_received with source=user-pc
     const result = await pool.query(`
-      SELECT service_id, MAX(timestamp) as last_event
+      SELECT event_type, MAX(timestamp) as last_event
       FROM dev_ops_events
-      WHERE timestamp > NOW() - INTERVAL '1 hour'
-        AND (
-          (service_id = 'user-pc' AND event_type = 'pc_transcript_sent')
-          OR (service_id = 'router-9500' AND event_type = 'transcript_received' AND metadata->>'source' = 'user-pc')
-        )
-      GROUP BY service_id
+      WHERE service_id = 'user-pc'
+        AND event_type IN ('pc_heartbeat', 'pc_transcript_sent')
+        AND timestamp > NOW() - INTERVAL '1 hour'
+      GROUP BY event_type
     `);
-
     await pool.end();
 
-    const times: Record<string, number> = {};
+    const times: { heartbeatTime?: number; transcriptTime?: number } = {};
     for (const row of result.rows) {
-      // Use the most recent event time for user-pc
       const eventTime = new Date(row.last_event).getTime();
-      if (!times['user-pc'] || eventTime > times['user-pc']) {
-        times['user-pc'] = eventTime;
+      if (row.event_type === 'pc_heartbeat') {
+        times.heartbeatTime = eventTime;
+      } else if (row.event_type === 'pc_transcript_sent') {
+        times.transcriptTime = eventTime;
       }
     }
     return times;
   } catch (error) {
-    console.error('[Operations Health] Last event time fetch failed:', error);
+    console.error('[Operations Health] PC health fetch failed:', error);
     return {};
   }
 }
@@ -154,9 +206,9 @@ async function getLastEventTimes(): Promise<Record<string, number>> {
  * Check health of all studio services
  */
 export async function checkAllServicesHealth(): Promise<HealthResponse> {
-  const [pm2Statuses, lastEventTimes] = await Promise.all([
+  const [pm2Statuses, pcHealth] = await Promise.all([
     getPM2Status(),
-    getLastEventTimes(),
+    getPCHealth(),
   ]);
 
   // Check all services in parallel
@@ -164,17 +216,32 @@ export async function checkAllServicesHealth(): Promise<HealthResponse> {
     STUDIO_SERVICES.map(async (service): Promise<ServiceHealth> => {
       const healthPing = await pingHealthEndpoint(service);
       const pm2 = pm2Statuses[service.pm2Name || ''];
-      const lastEventTime = lastEventTimes[service.id];
 
-      return {
+      // For user-pc, include additional tailer status info
+      const isUserPC = service.id === 'user-pc';
+      const baseHealth: ServiceHealth = {
         id: service.id,
-        status: determineStatus(service, healthPing.ok, pm2?.status, lastEventTime),
+        status: determineStatus(service, healthPing.ok, pm2?.status, isUserPC ? pcHealth : undefined),
         pm2Status: pm2?.status as ServiceHealth['pm2Status'],
         healthPing: healthPing.ok,
         cpu: pm2?.cpu,
         memory: pm2?.memory,
         uptime: pm2?.uptime,
       };
+
+      // Add tailer status for user-pc
+      if (isUserPC && pcHealth.heartbeatTime) {
+        const transcriptAge = pcHealth.transcriptTime
+          ? (Date.now() - pcHealth.transcriptTime) / 1000
+          : Infinity;
+
+        // Tailer warning: heartbeat is fresh but no transcript in 15 min (900s)
+        if (transcriptAge > 900 && pcHealth.idleSeconds !== undefined && pcHealth.idleSeconds < 300) {
+          (baseHealth as any).tailerWarning = 'Tailer may be down - no transcripts in 15+ min';
+        }
+      }
+
+      return baseHealth;
     })
   );
 
