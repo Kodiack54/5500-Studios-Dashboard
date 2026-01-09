@@ -28,9 +28,11 @@ const SUPPORT_ROUTES = ['/servers', '/dev-controls', '/helpdesk', '/admin', '/se
 const FORGE_ROUTES = ['/the-forge', '/forge'];
 const PLANNING_ROUTES = ['/roadmap', '/planning'];
 // Routes that inherit mode (project if stickyProject set, else support)
-const INHERIT_ROUTES = ['/session-logs', '/ai-team', '/terminal', '/calendar', '/dashboard', '/studio', '/project-management', '/team', '/settings', '/credentials', '/operations'];
+const INHERIT_ROUTES = ['/session-logs', '/ai-team', '/terminal', '/calendar', '/dashboard', '/studio', '/project-management', '/team', '/settings', '/credentials'];
 // System routes force effectiveProject to Studios Platform
 const SYSTEM_ROUTES = ['/servers', '/dev-controls', '/helpdesk', '/admin', '/security'];
+// Passive routes - viewing only, don't trigger context flips (preserves current context)
+const PASSIVE_ROUTES = ['/operations'];
 const STUDIOS_PLATFORM_ID = '21bdd846-7b03-4879-b5ea-04263594da1e'; // Studios Platform UUID from dev_projects
 const STUDIOS_PLATFORM_SLUG = 'studios';
 const STUDIOS_PLATFORM_NAME = 'Studios Platform';
@@ -452,8 +454,16 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Context Contract v1.0: Write context immediately on flip (effectiveProject or resolvedMode change)
+  // EXCEPT on passive routes (like /operations) which preserve existing context
   useEffect(() => {
     if (!userId) return;
+
+    // Skip context flips on passive routes - these are view-only pages
+    const isPassiveRoute = pathname && PASSIVE_ROUTES.some(route => pathname.startsWith(route));
+    if (isPassiveRoute) {
+      console.log('[UserContext] Passive route, skipping context flip:', pathname);
+      return;
+    }
 
     const currentProjectId = effectiveProject?.id || null;
     const hasChanged =
