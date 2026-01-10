@@ -100,6 +100,7 @@ export async function GET() {
           const config = configMap.get(repoSlug);
           
           // Merge: config overrides discovered values
+          // Include BOTH server_path and pc_path for every repo
           node.repos.push({
             id: row.id,
             repo: repoSlug,
@@ -114,14 +115,17 @@ export async function GET() {
             drift_reasons: row.drift_reasons || [],
             last_seen: row.node_sensor_last_seen || row.updated_at,
             last_commit_msg: state.last_commit_msg,
-            // Config overrides for display
+            // Config overrides - include BOTH paths
             display_name: config?.display_name || null,
-            path: config?.server_path || state.path,
-            github_url: config?.github_url || state.github_url,
+            server_path: config?.server_path || state.path || null,
+            pc_path: config?.pc_path || null,
+            github_url: config?.github_url || state.github_url || null,
             is_ai_team: config?.is_ai_team || false,
             pm2_name: config?.pm2_name || null,
             droplet_name: config?.droplet_name || null,
             notes: config?.notes || null,
+            client_id: config?.client_id || null,
+            project_id: config?.project_id || null,
           });
         }
       }
@@ -147,9 +151,16 @@ export async function GET() {
               last_seen: pcEvent.timestamp,
               last_commit_msg: r.last_commit_msg,
               last_commit_time: r.last_commit_time,
+              // Config overrides - include BOTH paths
               display_name: config?.display_name || null,
-              path: config?.pc_path || r.path,
+              server_path: config?.server_path || null,
+              pc_path: config?.pc_path || r.path || null,
+              github_url: config?.github_url || null,
               is_ai_team: config?.is_ai_team || false,
+              pm2_name: config?.pm2_name || null,
+              droplet_name: config?.droplet_name || null,
+              client_id: config?.client_id || null,
+              project_id: config?.project_id || null,
             };
           }),
         };

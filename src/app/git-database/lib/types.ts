@@ -151,9 +151,10 @@ export interface SummaryFilters {
 // =============================================================================
 
 export const OFFLINE_THRESHOLDS = {
-  PC_OFFLINE_MS: 90_000,      // 90 seconds
-  SERVER_OFFLINE_MS: 90_000,  // 90 seconds
-  STALE_MS: 300_000,          // 5 minutes
+  PC_OFFLINE_MS: 300_000,      // 5 minutes
+  SERVER_OFFLINE_MS: 300_000,  // 5 minutes
+  PC_STALE_MS: 120_000,      // 2 minutes (Fresh -> Stale)
+  STALE_MS: 300_000,          // 5 minutes (legacy)
 } as const;
 
 // =============================================================================

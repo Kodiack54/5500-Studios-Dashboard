@@ -86,7 +86,7 @@ export default function RepoDetailPage() {
           setClients(clientsData);
         }
         
-        const driftRes = await fetch('/git-database/api/drift');
+        const driftRes = await fetch('/git-database/api/drift', { cache: 'no-store' });
         const driftData = await driftRes.json();
         if (driftData.success) {
           const nodeIds = driftData.nodes?.map((n: any) => n.node_id) || [];
@@ -95,15 +95,15 @@ export default function RepoDetailPage() {
           const serverPaths: DiscoveredPath[] = [];
           for (const node of driftData.nodes || []) {
             for (const repo of node.repos || []) {
-              if (repo.path) {
-                serverPaths.push({ repo: repo.repo, path: repo.path, node_id: node.node_id });
+              if (repo.server_path) {
+                serverPaths.push({ repo: repo.repo, path: repo.server_path, node_id: node.node_id });
               }
             }
           }
           if (driftData.pc?.repos) {
             for (const repo of driftData.pc.repos) {
-              if (repo.path) {
-                serverPaths.push({ repo: repo.repo, path: repo.path, node_id: 'user-pc' });
+              if (repo.pc_path) {
+                serverPaths.push({ repo: repo.repo, path: repo.pc_path, node_id: 'user-pc' });
               }
             }
           }

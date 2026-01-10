@@ -19,46 +19,48 @@ interface StudioLiveFeedProps {
   onServiceSelect?: (serviceId: string) => void;
 }
 
-// Map event types to display badges
-const eventTypeBadges: Record<string, string> = {
-  context_flip: 'bg-purple-500/20 text-purple-400',
-  context_heartbeat: 'bg-blue-500/20 text-blue-400',
-  pc_heartbeat: 'bg-blue-500/20 text-blue-400',
-  pc_sender_heartbeat: 'bg-blue-500/20 text-blue-400',
-  external_claude_heartbeat: 'bg-blue-500/20 text-blue-400',
-  terminal_heartbeat: 'bg-blue-500/20 text-blue-400',
-  router_heartbeat: 'bg-blue-500/20 text-blue-400',
-  dashboard_process_heartbeat: 'bg-blue-500/20 text-blue-400',
-  pc_transcript_sent: 'bg-green-500/20 text-green-400',
-  terminal_transcript_sent: 'bg-green-500/20 text-green-400',
-  pc_dump_sent: 'bg-green-500/20 text-green-400',
-  terminal_dump_sent: 'bg-green-500/20 text-green-400',
-  transcript_received: 'bg-yellow-500/20 text-yellow-400',
-  // AI Team events
-  chad_tick: 'bg-blue-500/20 text-blue-400',
-  chad_checkpoint: 'bg-green-500/20 text-green-400',
-  chad_excursion_suppressed: 'bg-yellow-500/20 text-yellow-400',
-  chad_error: 'bg-red-500/20 text-red-400',
-  // Future AI team members (susan, jen, etc.) will use same colors
-  susan_tick: 'bg-blue-500/20 text-blue-400',
-  susan_checkpoint: 'bg-green-500/20 text-green-400',
-  jen_tick: 'bg-blue-500/20 text-blue-400',
-  jen_checkpoint: 'bg-green-500/20 text-green-400',
-  // 94xx Drift Tracking family
-  pc_git_status: 'bg-green-500/20 text-green-400',
-  pc_git_commit: 'bg-green-500/20 text-green-400',
-  git_status: 'bg-green-500/20 text-green-400',
-  node_sensor_tick: 'bg-blue-500/20 text-blue-400',
-  node_sensor_error: 'bg-red-500/20 text-red-400',
-  git_origin_tick: 'bg-blue-500/20 text-blue-400',
-  git_origin_error: 'bg-red-500/20 text-red-400',
-  schema_status: 'bg-green-500/20 text-green-400',
-  schema_tracker_tick: 'bg-blue-500/20 text-blue-400',
-  schema_error: 'bg-red-500/20 text-red-400',
-  sync_check: 'bg-purple-500/20 text-purple-400',
-  sync_in_sync: 'bg-green-500/20 text-green-400',
-  sync_drift_detected: 'bg-orange-500/20 text-orange-400',
+
+// Two-layer verb model from 9200
+interface VerbInfo {
+  color: string;
+  severity: number;
+  description: string;
+}
+
+interface ActionInfo {
+  verb: string;
+  label: string;
+  description: string;
+  color: string;
+}
+
+interface VerbRegistry {
+  verbsByCode: Record<string, VerbInfo>;
+  actionsByKey: Record<string, ActionInfo>;
+}
+
+
+// Fallback colors when registry unavailable
+const FALLBACK_COLORS: Record<string, string> = {
+  FAIL: 'bg-red-500/20 text-red-400',
+  BEAT: 'bg-blue-500/20 text-blue-400',
+  LOOK: 'bg-blue-500/20 text-blue-400',
+  STMP: 'bg-green-500/20 text-green-400',
+  GITS: 'bg-green-500/20 text-green-400',
+  DEFAULT: 'bg-gray-500/20 text-gray-400',
 };
+
+// Color name to Tailwind class mapping
+const COLOR_CLASSES: Record<string, string> = {
+  blue: 'bg-blue-500/20 text-blue-400',
+  green: 'bg-green-500/20 text-green-400',
+  red: 'bg-red-500/20 text-red-400',
+  yellow: 'bg-yellow-500/20 text-yellow-400',
+  purple: 'bg-purple-500/20 text-purple-400',
+  orange: 'bg-orange-500/20 text-orange-400',
+  gray: 'bg-gray-500/20 text-gray-400',
+};
+
 
 export default function StudioLiveFeed({
   selectedServiceId,
@@ -73,11 +75,39 @@ export default function StudioLiveFeed({
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastFetchRef = useRef<string | null>(null);
 
+  // Verb registry from 9200
+  const [verbRegistry, setVerbRegistry] = useState<VerbRegistry>({ verbsByCode: {}, actionsByKey: {} });
+  const [registryLoaded, setRegistryLoaded] = useState(false);
+
+
   const pipelineServices = getPipelineServices();
   const aiTeamServices = getAITeamServices();
 
   // Get current services based on active group
   const currentServices = activeGroup === 'pipeline' ? pipelineServices : aiTeamServices;
+
+  // Fetch verb registry on mount
+  useEffect(() => {
+    const fetchVerbs = async () => {
+      try {
+        const res = await fetch('/api/operations/verbs');
+        if (res.ok) {
+          const data = await res.json();
+          setVerbRegistry({
+            verbsByCode: data.verbsByCode || {},
+            actionsByKey: data.actionsByKey || {}
+          });
+        }
+      } catch (err) {
+        console.warn('[StudioLiveFeed] Failed to load verb registry, using fallbacks');
+      } finally {
+        setRegistryLoaded(true);
+      }
+    };
+    fetchVerbs();
+  }, []);
+
+
 
   // Filter events based on active group and filter
   const filteredEvents = events.filter(event => {
@@ -165,7 +195,7 @@ export default function StudioLiveFeed({
   };
 
   const getEventBadge = (eventType: string) => {
-    return eventTypeBadges[eventType] || 'bg-gray-500/20 text-gray-400';
+    return getEventBadgeClass(eventType);
   };
 
   // AI Ops description resolver
@@ -194,46 +224,48 @@ export default function StudioLiveFeed({
     return null;
   };
 
-  const getEventLabel = (eventType: string) => {
-    const labels: Record<string, string> = {
-      context_flip: 'FLIP',
-      context_heartbeat: 'BEAT',
-      pc_heartbeat: 'BEAT',
-      pc_sender_heartbeat: 'BEAT',
-      external_claude_heartbeat: 'BEAT',
-      terminal_heartbeat: 'BEAT',
-      router_heartbeat: 'BEAT',
-      dashboard_process_heartbeat: 'BEAT',
-      pc_transcript_sent: 'SENT',
-      terminal_transcript_sent: 'SENT',
-      pc_dump_sent: 'SENT',
-      terminal_dump_sent: 'SENT',
-      transcript_received: 'RECV',
-      // AI Team labels
-      chad_tick: 'LOOK',
-      chad_checkpoint: 'STMP',
-      chad_excursion_suppressed: 'EXCP',
-      chad_error: 'FAIL',
-      susan_tick: 'LOOK',
-      susan_checkpoint: 'STMP',
-      jen_tick: 'LOOK',
-      jen_checkpoint: 'STMP',
-      // 94xx Drift Tracking family
-      pc_git_status: 'GITS',
-      pc_git_commit: 'GITS',
-      git_status: 'GITS',
-      node_sensor_tick: 'LOOK',
-      node_sensor_error: 'FAIL',
-      git_origin_tick: 'LOOK',
-      git_origin_error: 'FAIL',
-      schema_status: 'DATA',
-      schema_tracker_tick: 'LOOK',
-      schema_error: 'FAIL',
-      sync_check: 'SYNC',
-      sync_in_sync: 'SYNC',
-      sync_drift_detected: 'SYNC',
-    };
-    return labels[eventType] || eventType.toUpperCase();
+  
+  // Get badge class from registry or fallback
+  const getEventBadgeClass = (eventType: string, meta?: Record<string, unknown>): string => {
+    // Try to find action by agent:action_code
+    const agent = meta?.agent as string;
+    const actionCode = meta?.action_code as string;
+    if (agent && actionCode) {
+      const key = agent + ':' + actionCode;
+      const action = verbRegistry.actionsByKey[key];
+      if (action) {
+        return COLOR_CLASSES[action.color] || COLOR_CLASSES.gray;
+      }
+    }
+    // Fallback: look up verb directly
+    const verb = meta?.verb as string;
+    if (verb && verbRegistry.verbsByCode[verb]) {
+      return COLOR_CLASSES[verbRegistry.verbsByCode[verb].color] || COLOR_CLASSES.gray;
+    }
+    // Pattern-based fallback
+    if (eventType.endsWith('_error')) return FALLBACK_COLORS.FAIL;
+    if (eventType.endsWith('_heartbeat')) return FALLBACK_COLORS.BEAT;
+    if (eventType.endsWith('_tick')) return FALLBACK_COLORS.LOOK;
+    if (eventType.endsWith('_checkpoint')) return FALLBACK_COLORS.STMP;
+    return FALLBACK_COLORS.DEFAULT;
+  };
+
+  const getEventLabel = (eventType: string, meta?: Record<string, unknown>) => {
+    // Try to find action by agent:action_code
+    const agent = meta?.agent as string;
+    const actionCode = meta?.action_code as string;
+    if (agent && actionCode) {
+      const key = agent + ':' + actionCode;
+      const action = verbRegistry.actionsByKey[key];
+      if (action) {
+        return action.verb; // Return the verb code like LOOK, STMP, etc.
+      }
+    }
+    // Direct verb from metadata
+    const verb = meta?.verb as string;
+    if (verb) return verb;
+    // Fallback
+    return 'UNKN';
   };
 
   return (

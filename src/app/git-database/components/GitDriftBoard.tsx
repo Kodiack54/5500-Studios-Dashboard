@@ -105,8 +105,8 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
     const fetchData = async () => {
       try {
         const [driftRes, registryRes] = await Promise.all([
-          fetch('/git-database/api/drift'),
-          fetch('/git-database/api/registry'),
+          fetch('/git-database/api/drift', { cache: 'no-store' }),
+          fetch('/git-database/api/registry', { cache: 'no-store' }),
         ]);
         
         const driftData: GitDriftResponse = await driftRes.json();

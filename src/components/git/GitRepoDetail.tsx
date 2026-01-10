@@ -89,6 +89,7 @@ export default function GitRepoDetail({ repoName, isModal = false, onClose }: Gi
   const [error, setError] = useState<string | null>(null);
   const [stateHash, setStateHash] = useState<string | null>(null);
   const stateHashRef = useRef<string | null>(null);
+  const initialLoadDoneRef = useRef(false);
   const [pcLastSeen, setPcLastSeen] = useState<string | null>(null);
   const [serverLastSeen, setServerLastSeen] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -146,26 +147,38 @@ export default function GitRepoDetail({ repoName, isModal = false, onClose }: Gi
     try {
       const res = await fetch(`/git-database/api/repo-hash?repo=${encodeURIComponent(repoName)}`);
       const data = await res.json();
+      console.log('[GitRepoDetail] checkHash response:', { 
+        success: data.success, 
+        newHash: data.state_hash, 
+        currentHash: stateHashRef.current,
+        changed: data.state_hash !== stateHashRef.current
+      });
       if (data.success) {
         setPcLastSeen(data.pc_last_seen);
         setServerLastSeen(data.server_last_seen);
         // Return true if hash changed (need to refetch)
         if (data.state_hash !== stateHashRef.current) {
+          console.log('[GitRepoDetail] Hash changed, will refetch');
           stateHashRef.current = data.state_hash;
           setStateHash(data.state_hash);
           return true;
         }
       }
       return false;
-    } catch {
+    } catch (e) {
+      console.error('[GitRepoDetail] checkHash error:', e);
       return false;
     }
   };
 
   useEffect(() => {
     const fetchData = async (force = false) => {
-      // Only show loading on initial fetch
-      if (!repoDetails) setLoading(true);
+      console.log('[GitRepoDetail] fetchData called', { force, initialLoadDone: initialLoadDoneRef.current, stateHash: stateHashRef.current });
+      // Only show loading on initial fetch (use ref to avoid stale closure)
+      if (!initialLoadDoneRef.current) {
+        console.log('[GitRepoDetail] Setting loading=true (initial fetch)');
+        setLoading(true);
+      }
       
       // If not forcing and we have data, check hash first
       if (!force && repoDetails && stateHash) {
@@ -224,6 +237,7 @@ export default function GitRepoDetail({ repoName, isModal = false, onClose }: Gi
           }
           
           setRepoDetails(details);
+          initialLoadDoneRef.current = true;
         }
         
         await fetchConfig();
@@ -252,10 +266,15 @@ export default function GitRepoDetail({ repoName, isModal = false, onClose }: Gi
 
     fetchData();
     // Poll hash every 15s, only full fetch on change
+    console.log('[GitRepoDetail] Setting up 15s interval for', repoName);
     const interval = setInterval(async () => {
+      console.log('[GitRepoDetail] Interval tick - checking hash');
       const changed = await checkHash();
       if (changed) {
+        console.log('[GitRepoDetail] Hash changed in interval, calling fetchData(true)');
         fetchData(true);
+      } else {
+        console.log('[GitRepoDetail] Hash unchanged, skipping fetch');
       }
     }, 15000);
     return () => clearInterval(interval);
