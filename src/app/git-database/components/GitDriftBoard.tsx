@@ -499,17 +499,16 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                       <div className="w-20 text-right"><span className="text-xs text-gray-400">{family.pc.branch}</span></div>
                       <div className="w-48 text-right"><span className="text-xs text-gray-500">{formatCommitDate(family.pc.last_commit_time)}</span></div>
                       <div className="w-20 text-right">
-                        <span className={`text-xs font-mono ${family.pc.head?.slice(0,7) === primaryHead ? 'text-green-400' : 'text-blue-400'}`}>
-                          {family.pc.head?.slice(0, 7) || "—"}
+                        <span className={`text-xs font-mono cursor-help ${family.pc.head?.slice(0,7) === primaryHead ? 'text-green-400' : 'text-blue-400'}`} title={family.pc.last_commit_msg || 'No commit message'}>{family.pc.head?.slice(0, 7) || "—"}
                         </span>
                       </div>
                       <div className="w-16 text-center">
                         {family.pc.dirty ? <span className="text-orange-400 text-xs">● dirty</span> : <span className="text-green-400/60 text-xs">○ clean</span>}
                       </div>
                       <div className="w-20 text-center font-mono text-xs">
-                        <span className={family.pc.ahead > 0 ? 'text-cyan-400' : 'text-gray-500'}>+{family.pc.ahead || 0}</span>
+                        <span className={family.pc.ahead > 0 ? 'text-blue-400' : 'text-gray-500'}>+{family.pc.ahead || 0}</span>
                         <span className="text-gray-600">/</span>
-                        <span className={family.pc.behind > 0 ? 'text-orange-400' : 'text-gray-500'}>-{family.pc.behind || 0}</span>
+                        <span className={family.pc.behind > 0 ? 'text-blue-300' : 'text-gray-500'}>-{family.pc.behind || 0}</span>
                       </div>
                       <div className="w-16 text-right">
                         {family.pc.head?.slice(0,7) === primaryHead ? 
@@ -547,15 +546,15 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                           <div className="w-20 text-right"><span className="text-xs text-gray-400">{inst.server.repo.branch}</span></div>
                           <div className="w-48 text-right"><span className="text-xs text-gray-500">{formatCommitDate(inst.server.repo.last_commit_time)}</span></div>
                           <div className="w-20 text-right">
-                            <span className={`text-xs font-mono ${matchesPrimary ? 'text-green-400' : 'text-orange-400'}`}>{head || '—'}</span>
+                            <span className={`text-xs font-mono cursor-help ${matchesPrimary ? 'text-green-400' : 'text-orange-400'}`} title={inst.server?.repo.last_commit_msg || 'No commit message'}>{head || '—'}</span>
                           </div>
                           <div className="w-16 text-center">
                             {isDirty ? <span className="text-orange-400 text-xs">● dirty</span> : <span className="text-green-400/60 text-xs">○ clean</span>}
                           </div>
                           <div className="w-20 text-center font-mono text-xs">
-                            <span className={inst.server.repo.ahead > 0 ? 'text-cyan-400' : 'text-gray-500'}>+{inst.server.repo.ahead || 0}</span>
+                            <span className={inst.server.repo.ahead > 0 ? 'text-purple-400' : 'text-gray-500'}>+{inst.server.repo.ahead || 0}</span>
                             <span className="text-gray-600">/</span>
-                            <span className={inst.server.repo.behind > 0 ? 'text-orange-400' : 'text-gray-500'}>-{inst.server.repo.behind || 0}</span>
+                            <span className={inst.server.repo.behind > 0 ? 'text-purple-300' : 'text-gray-500'}>-{inst.server.repo.behind || 0}</span>
                           </div>
                           <div className="w-16 text-right">
                             {matchesPrimary ? 
@@ -621,17 +620,15 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                       <div className="w-20 text-right"><span className="text-xs text-gray-400">{pair.pc.branch}</span></div>
                       <div className="w-48 text-right"><span className="text-xs text-gray-500">{formatCommitDate(pair.pc.last_commit_time)}</span></div>
                       <div className="w-20 text-right">
-                        <span className={`text-xs font-mono ${matched ? 'text-green-400' : 'text-blue-400'}`}>
-                          {pair.pc.head?.slice(0, 7) || "—"}
-                        </span>
+                        <span className={`text-xs font-mono cursor-help ${matched ? 'text-green-400' : 'text-blue-400'}`} title={pair.pc.last_commit_msg || 'No commit message'}>{pair.pc.head?.slice(0, 7) || "—"}</span>
                       </div>
                       <div className="w-16 text-center">
                         {pair.pc.dirty ? <span className="text-orange-400 text-xs">● dirty</span> : <span className="text-green-400/60 text-xs">○ clean</span>}
                       </div>
                       <div className="w-20 text-center font-mono text-xs">
-                        <span className={pair.pc.ahead > 0 ? 'text-cyan-400' : 'text-gray-500'}>+{pair.pc.ahead || 0}</span>
+                        <span className={pair.pc.ahead > 0 ? 'text-blue-400' : 'text-gray-500'}>+{pair.pc.ahead || 0}</span>
                         <span className="text-gray-600">/</span>
-                        <span className={pair.pc.behind > 0 ? 'text-orange-400' : 'text-gray-500'}>-{pair.pc.behind || 0}</span>
+                        <span className={pair.pc.behind > 0 ? 'text-blue-300' : 'text-gray-500'}>-{pair.pc.behind || 0}</span>
                       </div>
                       <div className="w-16 text-right">
                         {matched ? <span className="text-xs text-green-400">synced</span> : <span className="text-xs text-blue-400">differs</span>}
@@ -661,9 +658,9 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                         {pair.server.repo.is_dirty ? <span className="text-orange-400 text-xs">● dirty</span> : <span className="text-green-400/60 text-xs">○ clean</span>}
                       </div>
                       <div className="w-20 text-center font-mono text-xs">
-                        <span className={pair.server.repo.ahead > 0 ? 'text-cyan-400' : 'text-gray-500'}>+{pair.server.repo.ahead || 0}</span>
+                        <span className={pair.server.repo.ahead > 0 ? 'text-purple-400' : 'text-gray-500'}>+{pair.server.repo.ahead || 0}</span>
                         <span className="text-gray-600">/</span>
-                        <span className={pair.server.repo.behind > 0 ? 'text-orange-400' : 'text-gray-500'}>-{pair.server.repo.behind || 0}</span>
+                        <span className={pair.server.repo.behind > 0 ? 'text-purple-300' : 'text-gray-500'}>-{pair.server.repo.behind || 0}</span>
                       </div>
                       <div className="w-16 text-right">
                         <div className={`w-3 h-3 rounded-full inline-block ${statusColor(serverStatus)}`} />
