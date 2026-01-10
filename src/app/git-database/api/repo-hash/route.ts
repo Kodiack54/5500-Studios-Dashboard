@@ -33,7 +33,7 @@ export async function GET(request: Request) {
           metadata,
           timestamp,
           ROW_NUMBER() OVER (PARTITION BY service_id ORDER BY timestamp DESC) as rn
-        FROM ops.ops_events
+        FROM public.dev_ops_events
         WHERE timestamp > NOW() - INTERVAL '7 days'
           AND event_type IN ('git_status', 'pc_git_status')
       )
