@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface GitCommit {
   sha: string;
@@ -88,6 +88,7 @@ export default function GitRepoDetail({ repoName, isModal = false, onClose }: Gi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stateHash, setStateHash] = useState<string | null>(null);
+  const stateHashRef = useRef<string | null>(null);
   const [pcLastSeen, setPcLastSeen] = useState<string | null>(null);
   const [serverLastSeen, setServerLastSeen] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -140,6 +141,7 @@ export default function GitRepoDetail({ repoName, isModal = false, onClose }: Gi
   };
 
   // Poll hash endpoint - lightweight check for changes
+  // Uses ref to avoid stale closure in setInterval
   const checkHash = async () => {
     try {
       const res = await fetch(`/git-database/api/repo-hash?repo=${encodeURIComponent(repoName)}`);
@@ -148,7 +150,8 @@ export default function GitRepoDetail({ repoName, isModal = false, onClose }: Gi
         setPcLastSeen(data.pc_last_seen);
         setServerLastSeen(data.server_last_seen);
         // Return true if hash changed (need to refetch)
-        if (data.state_hash !== stateHash) {
+        if (data.state_hash !== stateHashRef.current) {
+          stateHashRef.current = data.state_hash;
           setStateHash(data.state_hash);
           return true;
         }
