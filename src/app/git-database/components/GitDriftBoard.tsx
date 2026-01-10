@@ -58,6 +58,12 @@ function getInstanceLabel(repoName: string): string {
   return `SERVER ${tens}`;
 }
 
+function formatCommitDate(dateStr: string | undefined): string {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  return date.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
+}
+
 function formatTimeAgo(dateStr: string | undefined): string {
   if (!dateStr) return 'Never';
   const date = new Date(dateStr);
@@ -376,6 +382,7 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
       <div className="w-40">Instance</div>
       <div className="flex-1" />
       <div className="w-20 text-right">Branch</div>
+      <div className="w-48 text-right">Timestamp</div>
       <div className="w-20 text-right">HEAD</div>
       <div className="w-16 text-center">Status</div>
       <div className="w-20 text-center">+/-</div>
@@ -441,7 +448,7 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
         )}
         <button
           onClick={() => setShowIgnored(!showIgnored)}
-          className={`px-2 py-0.5 rounded text-xs ${showIgnored ? "bg-orange-600/30 text-orange-300" : "bg-gray-700/50 text-gray-500 hover:text-gray-300"}`}
+          className={`px-2 py-0.5 rounded text-xs ${showIgnored ? "bg-orange-600/30 text-orange-300" : "bg-gray-600 text-gray-300 hover:bg-gray-500 border border-gray-500"}`}
         >
           {showIgnored ? "Showing Ignored" : "Show Ignored"}
         </button>
@@ -480,7 +487,7 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
 
                 <div 
                   className={`flex items-center px-4 py-2 cursor-pointer hover:brightness-110 ${family.pc ? 'bg-blue-900/30' : 'bg-gray-800/30 opacity-50'}`}
-                  onClick={() => family.pc && handleCardClick(family.pc.repo)}
+                  onDoubleClick={() => family.pc && handleCardClick(family.pc.repo)}
                 >
                   <div className="w-24 flex-shrink-0">
                     <span className="px-2 py-0.5 text-xs bg-blue-500 text-white rounded font-bold">LOCAL</span>
@@ -490,9 +497,10 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                   {family.pc ? (
                     <>
                       <div className="w-20 text-right"><span className="text-xs text-gray-400">{family.pc.branch}</span></div>
+                      <div className="w-48 text-right"><span className="text-xs text-gray-500">{formatCommitDate(family.pc.last_commit_time)}</span></div>
                       <div className="w-20 text-right">
                         <span className={`text-xs font-mono ${family.pc.head?.slice(0,7) === primaryHead ? 'text-green-400' : 'text-blue-400'}`}>
-                          {family.pc.head?.slice(0, 7) || '—'}
+                          {family.pc.head?.slice(0, 7) || "—"}
                         </span>
                       </div>
                       <div className="w-16 text-center">
@@ -527,7 +535,7 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                       className={`flex items-center px-4 py-2 cursor-pointer hover:brightness-110 ${
                         inst.server ? 'bg-purple-900/30' : 'bg-gray-800/30 opacity-50'
                       }`}
-                      onClick={() => handleCardClick(inst.repoName)}
+                      onDoubleClick={() => handleCardClick(inst.repoName)}
                     >
                       <div className="w-24 flex-shrink-0">
                         <span className="px-2 py-0.5 text-xs bg-blue-600 text-white rounded font-bold">{label}</span>
@@ -537,6 +545,7 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                       {inst.server ? (
                         <>
                           <div className="w-20 text-right"><span className="text-xs text-gray-400">{inst.server.repo.branch}</span></div>
+                          <div className="w-48 text-right"><span className="text-xs text-gray-500">{formatCommitDate(inst.server.repo.last_commit_time)}</span></div>
                           <div className="w-20 text-right">
                             <span className={`text-xs font-mono ${matchesPrimary ? 'text-green-400' : 'text-orange-400'}`}>{head || '—'}</span>
                           </div>
@@ -581,7 +590,7 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
           <div 
             key={pair.repoName}
             className={`bg-gray-800/50 border-2 rounded-xl overflow-hidden cursor-pointer transition-all hover:bg-gray-800/80 ${statusBorder(gitStatus)}`}
-            onClick={() => handleCardClick(pair.repoName)}
+            onDoubleClick={() => handleCardClick(pair.repoName)}
           >
             <div className="px-4 py-2.5 bg-gray-900/60 border-b border-gray-700/50 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -610,9 +619,10 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                   {pair.pc ? (
                     <>
                       <div className="w-20 text-right"><span className="text-xs text-gray-400">{pair.pc.branch}</span></div>
+                      <div className="w-48 text-right"><span className="text-xs text-gray-500">{formatCommitDate(pair.pc.last_commit_time)}</span></div>
                       <div className="w-20 text-right">
                         <span className={`text-xs font-mono ${matched ? 'text-green-400' : 'text-blue-400'}`}>
-                          {pair.pc.head?.slice(0, 7) || '—'}
+                          {pair.pc.head?.slice(0, 7) || "—"}
                         </span>
                       </div>
                       <div className="w-16 text-center">
@@ -641,9 +651,10 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
                   {pair.server ? (
                     <>
                       <div className="w-20 text-right"><span className="text-xs text-gray-400">{pair.server.repo.branch}</span></div>
+                      <div className="w-48 text-right"><span className="text-xs text-gray-500">{formatCommitDate(pair.server.repo.last_commit_time)}</span></div>
                       <div className="w-20 text-right">
                         <span className={`text-xs font-mono ${matched ? 'text-green-400' : 'text-orange-400'}`}>
-                          {pair.server.repo.local_sha?.slice(0, 7) || '—'}
+                          {pair.server.repo.local_sha?.slice(0, 7) || "—"}
                         </span>
                       </div>
                       <div className="w-16 text-center">

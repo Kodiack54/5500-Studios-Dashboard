@@ -122,6 +122,7 @@ export async function GET(request: Request) {
             drift_reasons: row.drift_reasons || [],
             last_seen: row.node_sensor_last_seen || row.updated_at,
             last_commit_msg: state.last_commit_msg,
+            last_commit_time: state.last_commit_time,
             // Config overrides - include BOTH paths
             display_name: config?.display_name || null,
             server_path: config?.server_path || state.path || null,

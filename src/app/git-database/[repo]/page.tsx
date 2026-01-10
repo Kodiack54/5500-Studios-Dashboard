@@ -180,6 +180,9 @@ export default function RepoDetailPage() {
     
     setPageActions(
       <div className="flex items-center gap-2">
+        {repoConfig?.is_ignored && (
+          <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-lg animate-pulse">IGNORED</span>
+        )}
         {/* Two separate buttons for Git Tracker and Database */}
         <button
           onClick={() => setActiveView('git')}
