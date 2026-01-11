@@ -355,6 +355,19 @@ export default function Sidebar() {
               </button>
             )}
           </div>
+
+          {/* Droplets Button */}
+          <button
+            onClick={() => handleWorkTabClick('/droplets')}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              pathname?.startsWith('/droplets')
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <span>🖥️</span>
+            <span>Droplets</span>
+          </button>
         </div>
         )}
 
