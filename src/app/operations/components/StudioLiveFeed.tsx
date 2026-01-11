@@ -124,7 +124,7 @@ export default function StudioLiveFeed({
       if (lastFetchRef.current) {
         params.set('since', lastFetchRef.current);
       }
-      params.set('limit', '100');
+      params.set('limit', '200');
 
       const res = await fetch(`/api/operations/feed?${params}`);
       const data = await res.json();
@@ -194,8 +194,8 @@ export default function StudioLiveFeed({
     });
   };
 
-  const getEventBadge = (eventType: string) => {
-    return getEventBadgeClass(eventType);
+  const getEventBadge = (eventType: string, meta?: Record<string, unknown>) => {
+    return getEventBadgeClass(eventType, meta);
   };
 
   // AI Ops description resolver
@@ -377,12 +377,12 @@ export default function StudioLiveFeed({
                   {formatTime(event.timestamp)}
                 </span>
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] uppercase flex-shrink-0 ${getEventBadge(event.eventType)}`}
+                  className={`px-1.5 py-0.5 rounded text-[10px] uppercase flex-shrink-0 ${getEventBadge(event.eventType, event.details)}`}
                 >
-                  {getEventLabel(event.eventType)}
+                  {getEventLabel(event.eventType, event.details)}
                 </span>
-                <span className="text-cyan-400 flex-shrink-0">
-                  [{service?.label || event.serviceId}]
+                <span className="text-blue-400 font-medium flex-shrink-0">
+                  {(event.details as any)?.who_label || service?.label || event.serviceId}
                 </span>
                 <span className="text-gray-300">{event.message}</span>
                 {describeAIOpsEvent(event.eventType, event.details) && (

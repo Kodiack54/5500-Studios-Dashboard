@@ -10,7 +10,7 @@ const pool = new Pool({
 });
 
 interface AttentionItem {
-  type: 'git' | 'db' | 'droplet';
+  type: 'git' | 'db' | 'db_scope' | 'droplet';
   entity_id: string;
   title: string;
   attention_level: 'warn' | 'urgent';
@@ -59,7 +59,7 @@ export async function GET() {
   try {
     const items: AttentionItem[] = [];
 
-    // 1. Query Git repos with drift (orange/red status)
+    // 1. Query Git repos with attention (using required repos + suppressions)
     const gitResult = await pool.query(`
       SELECT
         id,
@@ -67,13 +67,17 @@ export async function GET() {
         drift_status,
         drift_reasons,
         current_state,
+        attention_level,
+        is_required,
+        drift_suppressed,
+        suppression_reason,
         node_sensor_last_seen,
         updated_at
       FROM ops.canonical_state
       WHERE type = 'repo'
-        AND drift_status IN ('orange', 'red')
+        AND attention_level IN ('warn', 'urgent')
       ORDER BY
-        CASE drift_status WHEN 'red' THEN 1 WHEN 'orange' THEN 2 END,
+        CASE attention_level WHEN 'urgent' THEN 1 WHEN 'warn' THEN 2 END,
         updated_at ASC
     `);
 
@@ -90,7 +94,7 @@ export async function GET() {
         type: 'git',
         entity_id: repoSlug,
         title: repoSlug,
-        attention_level: row.drift_status === 'red' ? 'urgent' : 'warn',
+        attention_level: row.attention_level,
         age_seconds: ageSeconds,
         summary,
         deep_link: `/git-database?repo=${encodeURIComponent(repoSlug)}`,
@@ -103,6 +107,7 @@ export async function GET() {
           dirty: state.is_dirty || state.dirty,
           ahead: state.ahead || 0,
           behind: state.behind || 0,
+          is_required: row.is_required,
           last_seen: lastSeen,
         },
       });
@@ -169,50 +174,120 @@ export async function GET() {
       // Table might not exist yet - that's OK
     }
 
-    // 3. Query Droplets with issues (if we have droplet status)
+    // 2b. Query DB scope drift (per-product schema drift)
+    try {
+      const scopeResult = await pool.query(`
+        SELECT
+          db_key,
+          prefix_set_hash,
+          prefixes,
+          status,
+          attention_level,
+          scope_hash,
+          tables_count,
+          columns_count,
+          indexes_count,
+          constraints_count,
+          drift_detected_at,
+          last_seen,
+          last_ok,
+          last_error,
+          updated_at
+        FROM ops.current_state_db_schema_scope
+        WHERE attention_level IN ('warn', 'urgent')
+        ORDER BY
+          CASE attention_level WHEN 'urgent' THEN 1 WHEN 'warn' THEN 2 END,
+          COALESCE(drift_detected_at, updated_at) ASC
+      `);
+
+      for (const row of scopeResult.rows) {
+        const driftAt = row.drift_detected_at || row.updated_at;
+        const ageSeconds = driftAt ? Math.floor((Date.now() - new Date(driftAt).getTime()) / 1000) : 0;
+        const prefixList = (row.prefixes || []).join(' + ');
+
+        const summary = row.last_error
+          ? `Error: ${row.last_error.slice(0, 50)}`
+          : `Scope: ${prefixList} • Tables: ${row.tables_count || 0} • Cols: ${row.columns_count || 0}`;
+
+        items.push({
+          type: 'db_scope',
+          entity_id: `${row.db_key}:${row.prefix_set_hash}`,
+          title: `DB Drift: ${row.db_key}`,
+          attention_level: row.attention_level,
+          age_seconds: ageSeconds,
+          summary,
+          deep_link: `/git-database?db=${encodeURIComponent(row.db_key)}`,
+          diagnostics: {
+            db_key: row.db_key,
+            prefix_set_hash: row.prefix_set_hash,
+            prefixes: row.prefixes,
+            scope_hash: row.scope_hash,
+            tables_count: row.tables_count,
+            columns_count: row.columns_count,
+            indexes_count: row.indexes_count,
+            constraints_count: row.constraints_count,
+            status: row.status,
+            drift_detected_at: row.drift_detected_at,
+            last_seen: row.last_seen,
+            last_ok: row.last_ok,
+            last_error: row.last_error,
+          },
+        });
+      }
+    } catch {
+      // Table might not exist yet - that's OK
+    }
+
+    // 3. Query Droplets with required services missing
     try {
       const dropletResult = await pool.query(`
         SELECT
-          id,
-          node_id,
-          current_state,
-          updated_at
-        FROM ops.canonical_state
-        WHERE type = 'node'
-          AND (
-            (current_state->>'stopped_count')::int > 0
-            OR (current_state->>'errored_count')::int > 0
-          )
-        ORDER BY updated_at ASC
+          d.droplet_id,
+          d.role,
+          d.pm2_online,
+          d.pm2_stopped,
+          d.required_services_total,
+          d.required_services_missing_count,
+          d.required_services_missing,
+          d.attention_level,
+          d.last_seen,
+          d.updated_at,
+          r.droplet_name
+        FROM ops.current_state_droplets d
+        LEFT JOIN ops.droplet_registry r ON r.node_id = d.droplet_id
+        WHERE d.attention_level IN ('warn', 'urgent')
+        ORDER BY
+          CASE d.attention_level WHEN 'urgent' THEN 1 WHEN 'warn' THEN 2 END,
+          d.updated_at ASC
       `);
 
       for (const row of dropletResult.rows) {
-        const state = row.current_state || {};
-        const stoppedCount = parseInt(state.stopped_count || '0', 10);
-        const erroredCount = parseInt(state.errored_count || '0', 10);
-        const ageSeconds = row.updated_at ? Math.floor((Date.now() - new Date(row.updated_at).getTime()) / 1000) : 0;
+        const ageSeconds = row.last_seen ? Math.floor((Date.now() - new Date(row.last_seen).getTime()) / 1000) : 0;
+        const missingCount = row.required_services_missing_count || 0;
+        const missingList = row.required_services_missing || [];
 
-        const hasErrors = erroredCount > 0;
-        const summary = hasErrors
-          ? `${erroredCount} errored, ${stoppedCount} stopped`
-          : `${stoppedCount} services stopped`;
+        const summary = missingCount > 0
+          ? `${missingCount} required service${missingCount > 1 ? 's' : ''} missing: ${missingList.slice(0, 3).join(', ')}${missingCount > 3 ? '...' : ''}`
+          : 'Services issue detected';
 
         items.push({
           type: 'droplet',
-          entity_id: row.node_id,
-          title: state.droplet_name || row.node_id,
-          attention_level: hasErrors ? 'urgent' : 'warn',
+          entity_id: row.droplet_id,
+          title: row.droplet_name || row.droplet_id,
+          attention_level: row.attention_level,
           age_seconds: ageSeconds,
           summary,
-          deep_link: `/droplets?node=${encodeURIComponent(row.node_id)}`,
+          deep_link: `/operations/droplets?node=${encodeURIComponent(row.droplet_id)}`,
           diagnostics: {
-            node_id: row.node_id,
-            droplet_name: state.droplet_name,
-            total_services: state.total_services,
-            running_count: state.running_count,
-            stopped_count: stoppedCount,
-            errored_count: erroredCount,
-            last_seen: row.updated_at,
+            droplet_id: row.droplet_id,
+            droplet_name: row.droplet_name,
+            role: row.role,
+            pm2_online: row.pm2_online,
+            pm2_stopped: row.pm2_stopped,
+            required_services_total: row.required_services_total,
+            required_services_missing_count: missingCount,
+            required_services_missing: missingList,
+            last_seen: row.last_seen,
           },
         });
       }

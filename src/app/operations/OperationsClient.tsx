@@ -9,6 +9,7 @@ import ServiceDetailPanel from './components/ServiceDetailPanel';
 import StudioStatsPanel from './components/StudioStatsPanel';
 import StudioLiveFeed from './components/StudioLiveFeed';
 import DropletStatusPanel from './components/DropletStatusPanel';
+import HeartbeatRegistryModal from './components/HeartbeatRegistryModal';
 
 export default function OperationsClient() {
   const [services] = useState<StudioService[]>(STUDIO_SERVICES);
@@ -24,6 +25,9 @@ export default function OperationsClient() {
   
   // Show droplet panel instead of service detail
   const [showDropletPanel, setShowDropletPanel] = useState(true);
+
+  // Heartbeat Registry modal
+  const [showHeartbeatModal, setShowHeartbeatModal] = useState(false);
 
   const setPageTitle = useContext(PageTitleContext);
   const setPageActions = useContext(PageActionsContext);
@@ -79,13 +83,23 @@ export default function OperationsClient() {
               : 'bg-blue-600/50 text-blue-100 hover:bg-blue-600/70'
           }`}
         >
-          DROPLET
+          STUDIO-DEV
+        </button>
+        <button
+          onClick={() => setShowHeartbeatModal(true)}
+          className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-all border border-black ${
+            showHeartbeatModal
+              ? 'bg-purple-500 text-white'
+              : 'bg-purple-600/50 text-purple-100 hover:bg-purple-600/70'
+          }`}
+        >
+          HEARTBEAT
         </button>
       </div>
     );
     
     return () => setPageActions(null);
-  }, [setPageTitle, setPageActions, activeView, showDropletPanel]);
+  }, [setPageTitle, setPageActions, activeView, showDropletPanel, showHeartbeatModal]);
 
   // Fetch health data
   const fetchHealth = async () => {
@@ -248,6 +262,11 @@ export default function OperationsClient() {
           />
         </div>
       </div>
+
+      {/* Heartbeat Registry Modal */}
+      {showHeartbeatModal && (
+        <HeartbeatRegistryModal onClose={() => setShowHeartbeatModal(false)} />
+      )}
     </div>
   );
 }

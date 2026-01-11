@@ -10,6 +10,9 @@ const AI_TEAM_PREFIXES = ['ai-chad', 'ai-jen', 'ai-susan', 'ai-ryan', 'ai-clair'
 
 const EXCLUDED_REPOS = ['ai-team', 'Studio', 'Projects'];
 
+// Global prefix always included for all repos
+const GLOBAL_PREFIX = 'nextbid_';
+
 const FAMILY_PATTERNS = [
   { pattern: /^ai-chad-\d+$/, family: 'ai-chad', display: 'Chad' },
   { pattern: /^ai-jen-\d+$/, family: 'ai-jen', display: 'Jen' },
@@ -30,9 +33,18 @@ interface RegistryEntry {
   db_target_id?: string;
   db_name?: string;
   db_schema?: string;
+  db_product_prefix?: string;
+  // Legacy per-repo fields (deprecated - use schema_* instead)
   db_last_ok_at?: string;
   db_last_err?: string;
   db_schema_hash?: string;
+  // Joined from ops.current_state_db_schema (canonical source)
+  schema_status?: string;
+  schema_last_seen?: string;
+  schema_last_ok?: string;
+  schema_last_error?: string;
+  schema_tables_count?: number;
+  schema_current_hash?: string;
 }
 
 function getFamilyKey(repoName: string): string | null {
@@ -187,37 +199,54 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
     }
   };
 
+  // DB status derived from ops.current_state_db_schema (joined via db_target_id)
   const dbStatusColor = (regEntry: RegistryEntry | undefined): string => {
     if (!regEntry) return 'bg-gray-500';
-    
+
     const hasDbConfig = !!(regEntry.db_type && regEntry.db_target_id && regEntry.db_name);
-    
     if (!hasDbConfig) return 'bg-yellow-500';
-    if (regEntry.db_last_err) return 'bg-orange-500';
-    if (!regEntry.db_last_ok_at) return 'bg-orange-500';
-    
-    const lastSync = new Date(regEntry.db_last_ok_at);
-    const now = new Date();
-    const diffHours = (now.getTime() - lastSync.getTime()) / 3600000;
-    
-    if (diffHours > 24) return 'bg-orange-500';
+
+    // Use joined schema state from current_state_db_schema
+    if (regEntry.schema_last_error) return 'bg-orange-500';
+    if (regEntry.schema_status === 'online' && regEntry.schema_last_ok) return 'bg-green-500';
+    if (regEntry.schema_last_seen && !regEntry.schema_last_ok) return 'bg-yellow-500';
+
+    // No schema data at all - never synced
+    if (!regEntry.schema_last_seen) return 'bg-orange-500';
+
+    // Check for stale data (>24h since last_ok)
+    if (regEntry.schema_last_ok) {
+      const lastSync = new Date(regEntry.schema_last_ok);
+      const now = new Date();
+      const diffHours = (now.getTime() - lastSync.getTime()) / 3600000;
+      if (diffHours > 24) return 'bg-orange-500';
+    }
+
     return 'bg-green-500';
   };
 
   const dbStatusText = (regEntry: RegistryEntry | undefined): string => {
     if (!regEntry) return 'Not Linked';
-    
+
     const hasDbConfig = !!(regEntry.db_type && regEntry.db_target_id && regEntry.db_name);
-    
     if (!hasDbConfig) return 'Awaiting Config';
-    if (regEntry.db_last_err) return 'Error';
-    if (!regEntry.db_last_ok_at) return 'Never Synced';
-    
-    const lastSync = new Date(regEntry.db_last_ok_at);
-    const now = new Date();
-    const diffHours = (now.getTime() - lastSync.getTime()) / 3600000;
-    
-    if (diffHours > 24) return 'Stale';
+
+    // Use joined schema state from current_state_db_schema
+    if (regEntry.schema_last_error) return 'Error';
+    if (regEntry.schema_status === 'online' && regEntry.schema_last_ok) return 'Verified';
+    if (regEntry.schema_last_seen && !regEntry.schema_last_ok) return 'Reporting';
+
+    // No schema data at all
+    if (!regEntry.schema_last_seen) return 'Never Synced';
+
+    // Check for stale data
+    if (regEntry.schema_last_ok) {
+      const lastSync = new Date(regEntry.schema_last_ok);
+      const now = new Date();
+      const diffHours = (now.getTime() - lastSync.getTime()) / 3600000;
+      if (diffHours > 24) return 'Stale';
+    }
+
     return 'Verified';
   };
 
@@ -409,18 +438,33 @@ export default function GitDriftBoard({ onRepoSelect, viewFilter = 'all', drople
               <span className="text-gray-400">{regEntry?.db_type}</span>
               <span className="mx-2">•</span>
               <span className="text-gray-400">{regEntry?.db_name}</span>
+              {regEntry?.schema_tables_count && (
+                <>
+                  <span className="mx-2">•</span>
+                  <span className="text-gray-400">{regEntry.schema_tables_count} tables</span>
+                </>
+              )}
             </div>
             <div className="text-sm text-gray-500">
-              Last pull: <span className="text-gray-400">{formatTimeAgo(regEntry?.db_last_ok_at)}</span>
+              Scope:{' '}
+              <span className="text-gray-400 font-mono">
+                {regEntry?.db_product_prefix
+                  ? `${GLOBAL_PREFIX} + ${regEntry.db_product_prefix}`
+                  : <span className="text-yellow-400">incomplete</span>
+                }
+              </span>
             </div>
-            {regEntry?.db_schema_hash && (
+            <div className="text-sm text-gray-500">
+              Last verified: <span className="text-gray-400">{formatTimeAgo(regEntry?.schema_last_ok)}</span>
+            </div>
+            {regEntry?.schema_current_hash && (
               <div className="text-xs text-gray-600 font-mono truncate">
-                Hash: {regEntry.db_schema_hash.slice(0, 12)}...
+                Hash: {regEntry.schema_current_hash.slice(0, 12)}...
               </div>
             )}
-            {regEntry?.db_last_err && (
-              <div className="text-xs text-red-400 truncate" title={regEntry.db_last_err}>
-                Error: {regEntry.db_last_err.slice(0, 40)}...
+            {regEntry?.schema_last_error && (
+              <div className="text-xs text-red-400 truncate" title={regEntry.schema_last_error}>
+                Error: {regEntry.schema_last_error.slice(0, 40)}...
               </div>
             )}
           </div>

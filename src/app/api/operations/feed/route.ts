@@ -1,6 +1,7 @@
 /**
  * Operations Live Feed API
- * Reads ONLY from dev_ops_events - the canonical operations event stream
+ * Reads from dev_ops_events with registry-based filtering
+ * Only shows events where action_registry.show_in_feed = TRUE
  */
 
 import { NextResponse } from 'next/server';
@@ -29,19 +30,14 @@ function getEventMessage(eventType: string, metadata: Record<string, unknown>): 
   const mode = metadata?.mode || 'unknown';
   const project = metadata?.project_name || metadata?.project_slug || metadata?.project_id || null;
   const source = metadata?.source || 'unknown';
-
-  // Format: "mode (project)" or just "mode" if no project
   const contextLabel = project ? `${mode} (${project})` : mode;
 
   switch (eventType) {
-    // Transcript events - include mode/project and trace
     case 'pc_transcript_sent':
     case 'terminal_transcript_sent':
       return `Transcript sent → 9500: ${contextLabel}${traceShort}`;
     case 'transcript_received':
       return `Transcript received from ${source}: ${contextLabel}${traceShort}`;
-
-    // All heartbeats - consistent format with mode/project
     case 'pc_heartbeat':
     case 'pc_sender_heartbeat':
     case 'external_claude_heartbeat':
@@ -50,33 +46,20 @@ function getEventMessage(eventType: string, metadata: Record<string, unknown>): 
     case 'dashboard_process_heartbeat':
     case 'context_heartbeat':
       return `Heartbeat: ${contextLabel}`;
-
-    // Context flips
     case 'context_flip':
       return `Context flip → ${contextLabel}`;
-
     default:
       return eventType;
   }
 }
 
-// Event type to badge style
-const eventTypeBadges: Record<string, string> = {
-  pc_transcript_sent: 'SENT',
-  terminal_transcript_sent: 'SENT',
-  transcript_received: 'RECV',
-  pc_sender_heartbeat: 'BEAT',
-  terminal_heartbeat: 'BEAT',
-  router_heartbeat: 'BEAT',
-  context_flip: 'FLIP',
-  context_heartbeat: 'BEAT',
-};
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const since = searchParams.get('since');
-  const limit = parseInt(searchParams.get('limit') || '100');
+  const limit = parseInt(searchParams.get('limit') || '200');
   const serviceFilter = searchParams.get('service');
+  const onlyVerbs = searchParams.get('only_verbs'); // Comma-separated for isolation mode
+  const includeUnregistered = searchParams.get('include_unregistered') === '1'; // Debug mode
 
   try {
     const { Pool } = await import('pg');
@@ -84,20 +67,38 @@ export async function GET(request: Request) {
 
     const sinceTime = since ? new Date(since) : new Date(Date.now() - 30 * 60 * 1000);
 
-    // Query dev_ops_events - the ONE source of truth
+    // Query with registry join for show_in_feed filtering
     let query = `
-      SELECT id, timestamp, service_id, event_type, trace_id, metadata
-      FROM dev_ops_events
-      WHERE timestamp > $1
+      SELECT e.id, e.timestamp, e.service_id, e.event_type, e.trace_id, e.metadata,
+             ar.verb, ar.show_in_feed
+      FROM dev_ops_events e
+      LEFT JOIN ops.action_registry ar ON ar.action_code = e.metadata->>'action_code'
+      WHERE e.timestamp > $1
     `;
-    const params: (string | number)[] = [sinceTime.toISOString()];
+    const params: (string | number | string[])[] = [sinceTime.toISOString()];
+    let paramIndex = 2;
 
-    if (serviceFilter) {
-      query += ` AND service_id = $2`;
-      params.push(serviceFilter);
+    // Filter by show_in_feed (unless debug mode)
+    if (!includeUnregistered) {
+      query += ` AND COALESCE(ar.show_in_feed, FALSE) = TRUE`;
     }
 
-    query += ` ORDER BY timestamp ASC LIMIT $${params.length + 1}`;
+    // Optional service filter
+    if (serviceFilter) {
+      query += ` AND e.service_id = $${paramIndex}`;
+      params.push(serviceFilter);
+      paramIndex++;
+    }
+
+    // Optional verb isolation mode
+    if (onlyVerbs) {
+      const verbList = onlyVerbs.split(',').map(v => v.trim().toUpperCase());
+      query += ` AND ar.verb = ANY($${paramIndex}::text[])`;
+      params.push(verbList);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY e.timestamp ASC LIMIT $${paramIndex}`;
     params.push(limit);
 
     const result = await pool.query(query, params);

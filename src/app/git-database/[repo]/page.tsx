@@ -6,6 +6,29 @@ import { PageTitleContext, PageActionsContext } from '@/app/layout';
 import Link from 'next/link';
 import GitRepoDetail from '@/components/git/GitRepoDetail';
 
+// Product prefixes for table scope filtering
+const PRODUCT_PREFIXES = [
+  { value: 'nextbidder_', label: 'NextBidder' },
+  { value: 'nexttech_', label: 'NextTech' },
+  { value: 'portal_', label: 'Portal' },
+  { value: 'ops_', label: 'Ops/Studio' },
+] as const;
+
+const GLOBAL_PREFIX = 'nextbid_';
+
+// Auto-suggest product prefix based on repo name
+function suggestProductPrefix(repoSlug: string): string | null {
+  const slug = repoSlug.toLowerCase();
+  if (slug.includes('nextbidder')) return 'nextbidder_';
+  if (slug.includes('nexttech')) return 'nexttech_';
+  if (slug.includes('portal')) return 'portal_';
+  // AI team, ops, dashboard, studio repos → ops_
+  if (slug.startsWith('ai-') || slug.includes('ops') || slug.includes('dashboard') ||
+      slug.includes('studio') || slug.includes('terminal') || slug.includes('susan') ||
+      slug.includes('chad') || slug.includes('jen')) return 'ops_';
+  return null;
+}
+
 interface RepoConfig {
   repo_slug: string;
   display_name?: string;
@@ -27,6 +50,7 @@ interface RepoConfig {
   db_target_id?: string;
   db_name?: string;
   db_schema?: string;
+  db_product_prefix?: string;
   db_last_ok_at?: string;
   db_last_err?: string;
   db_schema_hash?: string;
@@ -436,6 +460,43 @@ export default function RepoDetailPage() {
               </div>
 
               <div>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Product <span className={`${editForm.db_product_prefix ? 'text-green-400' : 'text-yellow-400'}`}>*</span>
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={editForm.db_product_prefix || ''}
+                    onChange={(e) => setEditForm({ ...editForm, db_product_prefix: e.target.value || undefined })}
+                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                    disabled={!editForm.db_type}
+                  >
+                    <option value="">-- Select Product --</option>
+                    {PRODUCT_PREFIXES.map(p => (
+                      <option key={p.value} value={p.value}>{p.label} ({p.value}*)</option>
+                    ))}
+                  </select>
+                  {!editForm.db_product_prefix && suggestProductPrefix(repoName) && (
+                    <button
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, db_product_prefix: suggestProductPrefix(repoName) || undefined })}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm whitespace-nowrap"
+                      disabled={!editForm.db_type}
+                    >
+                      Suggest
+                    </button>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Global tables ({GLOBAL_PREFIX}*) always included
+                  {!editForm.db_product_prefix && suggestProductPrefix(repoName) && (
+                    <span className="text-blue-400 ml-2">
+                      Suggested: {PRODUCT_PREFIXES.find(p => p.value === suggestProductPrefix(repoName))?.label}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-sm text-gray-400 mb-1">Schema (optional)</label>
                 <input
                   type="text"
@@ -565,11 +626,26 @@ export default function RepoDetailPage() {
                       <span className="ml-2 text-white">{repoConfig?.db_name}</span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Schema:</span>
-                      <span className="ml-2 text-white">{repoConfig?.db_schema || 'public'}</span>
+                      <span className="text-gray-500">Scope:</span>
+                      <span className="ml-2 text-white font-mono">
+                        {repoConfig?.db_product_prefix
+                          ? `${GLOBAL_PREFIX} + ${repoConfig.db_product_prefix}`
+                          : <span className="text-yellow-400">incomplete</span>
+                        }
+                      </span>
                     </div>
                   </div>
-                  
+
+                  {/* Scope warning if product prefix not set */}
+                  {!repoConfig?.db_product_prefix && (
+                    <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-3 text-sm">
+                      <span className="text-yellow-400 font-medium">Scope incomplete.</span>
+                      <span className="text-yellow-200/80 ml-2">
+                        Select a product to include product tables. Global tables ({GLOBAL_PREFIX}*) will be included automatically.
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-4 py-3 border-t border-gray-700">
                     {repoConfig?.db_last_ok_at ? (
                       <span className="text-green-400 text-sm">
@@ -587,7 +663,7 @@ export default function RepoDetailPage() {
                       <span className="text-red-400 text-sm">Error: {repoConfig.db_last_err}</span>
                     )}
                   </div>
-                  
+
                   <div className="bg-gray-900/50 rounded-lg p-6 mt-4">
                     <div className="text-gray-400 text-center py-8">
                       <div className="text-lg mb-2">Schema tables will be displayed here once 9403 pulls the schema.</div>

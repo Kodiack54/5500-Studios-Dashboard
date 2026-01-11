@@ -13,6 +13,9 @@ import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import crypto from 'crypto';
 
+// Global prefix always included for all repos in the ecosystem
+const GLOBAL_PREFIX = 'nextbid_';
+
 // Main pool - connects to kodiack_ai using env var
 const pool = new Pool({
   connectionString: process.env.DB_KODIACK_AI_URL,
@@ -101,12 +104,18 @@ function generateSchemaHash(tables: TableSchema[]): string {
   return 'sha256:' + crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 16);
 }
 
-// Fetch schema from a target database
+// Fetch schema from a target database with prefix filtering
 async function fetchSchemaFromTarget(
   targetId: string,
   dbName: string,
-  schemaName: string = 'public'
-): Promise<{ tables: TableSchema[]; error?: string }> {
+  schemaName: string = 'public',
+  productPrefix?: string
+): Promise<{ tables: TableSchema[]; error?: string; prefixesUsed?: string[] }> {
+  // Build list of prefixes to include
+  const prefixes: string[] = [GLOBAL_PREFIX];
+  if (productPrefix) {
+    prefixes.push(productPrefix);
+  }
   // Look up target config from ops.db_targets
   const targets = await getDbTargets();
   const targetConfig = targets.get(targetId);
@@ -139,13 +148,18 @@ async function fetchSchemaFromTarget(
   }
 
   try {
-    // Get all tables in schema
+    // Get all tables in schema, filtered by prefixes
+    // Build dynamic LIKE conditions for each prefix
+    const likeConditions = prefixes.map((_, i) => `table_name LIKE $${i + 2}`).join(' OR ');
+    const prefixPatterns = prefixes.map(p => `${p}%`);
+
     const tablesResult = await targetPool.query(`
-      SELECT table_name 
-      FROM information_schema.tables 
+      SELECT table_name
+      FROM information_schema.tables
       WHERE table_schema = $1 AND table_type = 'BASE TABLE'
+        AND (${likeConditions})
       ORDER BY table_name
-    `, [schemaName]);
+    `, [schemaName, ...prefixPatterns]);
 
     const tables: TableSchema[] = [];
 
@@ -224,10 +238,10 @@ async function fetchSchemaFromTarget(
     }
 
     await targetPool.end();
-    return { tables };
+    return { tables, prefixesUsed: prefixes };
   } catch (error) {
     await targetPool.end();
-    return { tables: [], error: (error as Error).message };
+    return { tables: [], error: (error as Error).message, prefixesUsed: prefixes };
   }
 }
 
@@ -247,7 +261,7 @@ export async function GET(request: Request) {
 
     // Get repo config
     const repoResult = await pool.query(`
-      SELECT repo_slug, db_type, db_target_id, db_name, db_schema,
+      SELECT repo_slug, db_type, db_target_id, db_name, db_schema, db_product_prefix,
              db_last_ok_at, db_last_err, db_schema_hash
       FROM ops.repo_registry
       WHERE repo_slug = $1
@@ -271,11 +285,12 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch schema from target
-    const { tables, error } = await fetchSchemaFromTarget(
+    // Fetch schema from target with prefix filtering
+    const { tables, error, prefixesUsed } = await fetchSchemaFromTarget(
       repo.db_target_id,
       repo.db_name,
-      repo.db_schema || 'public'
+      repo.db_schema || 'public',
+      repo.db_product_prefix
     );
 
     if (error) {
@@ -291,7 +306,13 @@ export async function GET(request: Request) {
         configured: true,
         error,
         last_ok_at: repo.db_last_ok_at,
-        baseline_hash: repo.db_schema_hash
+        baseline_hash: repo.db_schema_hash,
+        scope: {
+          prefixes: prefixesUsed,
+          global_prefix: GLOBAL_PREFIX,
+          product_prefix: repo.db_product_prefix || null,
+          scope_complete: !!repo.db_product_prefix
+        }
       });
     }
 
@@ -323,7 +344,13 @@ export async function GET(request: Request) {
       snapshot,
       baseline_hash: repo.db_schema_hash,
       has_drift: hasDrift,
-      drift_detected: hasDrift ? `Hash changed from ${repo.db_schema_hash} to ${schemaHash}` : null
+      drift_detected: hasDrift ? `Hash changed from ${repo.db_schema_hash} to ${schemaHash}` : null,
+      scope: {
+        prefixes: prefixesUsed,
+        global_prefix: GLOBAL_PREFIX,
+        product_prefix: repo.db_product_prefix || null,
+        scope_complete: !!repo.db_product_prefix
+      }
     });
 
   } catch (error) {
