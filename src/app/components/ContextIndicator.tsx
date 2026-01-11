@@ -98,7 +98,7 @@ export default function ContextIndicator() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`h-10 w-64 flex items-center justify-between gap-2 px-3 rounded-xl text-sm border-2 transition-colors bg-blue-500/20 text-white hover:bg-blue-500/30 ${
-          resolvedMode === 'project' ? 'border-blue-500/60' :
+          resolvedMode === 'worklog' ? 'border-blue-500/60' :
           resolvedMode === 'support' ? 'border-green-500/60' :
           resolvedMode === 'forge' ? 'border-orange-500/60' :
           resolvedMode === 'planning' ? 'border-purple-500/60' :

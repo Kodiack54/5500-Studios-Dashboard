@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export type ContextMode = 'project' | 'forge' | 'support' | 'planning' | 'other' | 'break';
+export type ContextMode = 'worklog' | 'forge' | 'support' | 'planning' | 'other' | 'break';
 export type ContextSource = 'universal' | 'studio' | 'autoflip' | 'timeclock' | 'manual';
 
 export interface UserContext {
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate mode
-    const validModes: ContextMode[] = ['project', 'forge', 'support', 'planning', 'other', 'break'];
+    const validModes: ContextMode[] = ['worklog', 'forge', 'support', 'planning', 'other', 'break'];
     if (!validModes.includes(mode)) {
       return NextResponse.json(
         { success: false, error: `Invalid mode. Must be one of: ${validModes.join(', ')}` },
@@ -136,11 +136,11 @@ export async function POST(request: NextRequest) {
 
     // Context Contract v1.0: Project is sticky, mode is fluid
     // - project_id can be set for ANY mode (planning/support/forge all track effective project)
-    // - project mode requires project_id (can't be "project mode" without a project)
+    // - worklog mode requires project_id (can't be "worklog mode" without a project)
     // - support/planning/forge can have project_id (sticky project or Studios Platform)
-    if (mode === 'project' && !project_id) {
+    if (mode === 'worklog' && !project_id) {
       return NextResponse.json(
-        { success: false, error: 'project_id required when mode=project' },
+        { success: false, error: 'project_id required when mode=worklog' },
         { status: 400 }
       );
     }
@@ -220,9 +220,9 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Build toast message
-    let toastMessage = `Context → ${mode.charAt(0).toUpperCase() + mode.slice(1)}`;
-    if (mode === 'project' && (project_name || project_slug)) {
+    // Build toast message (show "Project" for worklog mode in UI)
+    let toastMessage = `Context → ${mode === 'worklog' ? 'Project' : mode.charAt(0).toUpperCase() + mode.slice(1)}`;
+    if (mode === 'worklog' && (project_name || project_slug)) {
       toastMessage = `Context → ${project_name || project_slug}`;
       if (dev_team) {
         toastMessage += ` (${dev_team})`;

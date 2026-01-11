@@ -9,7 +9,7 @@
  * Usage:
  *   useContextAutoFlip('forge');  // Auto-flips to forge mode
  *   useContextAutoFlip('helpdesk');  // Auto-flips to helpdesk mode
- *   useContextAutoFlip('project', projectId, projectSlug, devTeam);  // Auto-flips to project
+ *   useContextAutoFlip('worklog', projectId, projectSlug, devTeam);  // Auto-flips to project
  */
 
 import { useEffect, useRef } from 'react';
@@ -39,8 +39,8 @@ export function useContextAutoFlip(
       if (!context) return true;
 
       // If target is project mode, check if same project
-      if (targetMode === 'project') {
-        if (context.mode !== 'project') return true;
+      if (targetMode === 'worklog') {
+        if (context.mode !== 'worklog') return true;
         if (context.project_id !== projectId) return true;
         // Optionally check dev_team too
         return false;
@@ -53,9 +53,9 @@ export function useContextAutoFlip(
     if (needsFlip) {
       hasFlipped.current = true;
 
-      if (targetMode === 'project' && projectId) {
-        flipContext('project', projectId, projectSlug, projectName, devTeam);
-      } else if (targetMode !== 'project') {
+      if (targetMode === 'worklog' && projectId) {
+        flipContext('worklog', projectId, projectSlug, projectName, devTeam);
+      } else if (targetMode !== 'worklog') {
         flipContext(targetMode);
       }
     }
@@ -123,5 +123,5 @@ export function useProjectAutoFlip(
   projectName?: string,
   devTeam?: string
 ) {
-  useContextAutoFlip('project', projectId, projectSlug, projectName, devTeam);
+  useContextAutoFlip('worklog', projectId, projectSlug, projectName, devTeam);
 }

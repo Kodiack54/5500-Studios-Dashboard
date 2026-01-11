@@ -18,7 +18,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, us
 import { usePathname } from 'next/navigation';
 import { getUser as getDevUser } from '@/lib/auth-client';
 
-export type ContextMode = 'project' | 'forge' | 'support' | 'planning' | 'other' | 'break';
+export type ContextMode = 'worklog' | 'forge' | 'support' | 'planning' | 'other' | 'break';
 export type ContextSource = 'universal' | 'studio' | 'autoflip' | 'timeclock' | 'manual';
 export type EventType = 'flip' | 'heartbeat';
 
@@ -121,7 +121,7 @@ const UserContextContext = createContext<UserContextValue>({
   hasActiveContext: false,
   stickyProject: null,
   effectiveProject: null,
-  resolvedMode: 'project',
+  resolvedMode: 'worklog',
   isSystemTab: false,
   previousWorkMode: null,
   fetchContext: async () => {},
@@ -160,7 +160,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
   const lastWriteRef = useRef<{ time: number; projectId: string | null; mode: ContextMode }>({
     time: 0,
     projectId: null,
-    mode: 'project',
+    mode: 'worklog',
   });
 
   // Ref for userId so heartbeat can access it without effect dependency
@@ -175,7 +175,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     stickyProject: StickyProject | null;
   }>({
     effectiveProject: null,
-    resolvedMode: 'project',
+    resolvedMode: 'worklog',
     isSystemTab: false,
     pathname: null,
     stickyProject: null,
@@ -227,7 +227,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
   // Work context ref - ONLY stores support/project modes, NEVER forge/planning
   // Used by passive routes to restore "work context" without snapping to forced modes
   const workContextRef = useRef<{ mode: ContextMode; project: StickyProject | null }>({
-    mode: 'project',
+    mode: 'worklog',
     project: {
       id: STUDIOS_PLATFORM_ID,
       slug: STUDIOS_PLATFORM_SLUG,
@@ -241,7 +241,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
   const isPlanningRoute = pathname && PLANNING_ROUTES.some(r => pathname.startsWith(r));
 
   const resolvedMode = useMemo((): ContextMode => {
-    if (!pathname) return 'project';
+    if (!pathname) return 'worklog';
 
     // Forced routes always win
     if (isPlanningRoute) return 'planning';
@@ -249,14 +249,14 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
 
     // Passive routes: project selection forces project mode, otherwise preserve last
     if (PASSIVE_ROUTES.some(r => pathname.startsWith(r))) {
-      return stickyProject ? 'project' : workContextRef.current.mode;
+      return stickyProject ? 'worklog' : workContextRef.current.mode;
     }
 
     // Support routes force support mode
     if (SUPPORT_ROUTES.some(r => pathname.startsWith(r))) return 'support';
 
-    // Normal routes: project selected → project mode, otherwise support
-    return 'project';
+    // Normal routes: project selected → worklog mode, otherwise support
+    return 'worklog';
   }, [pathname, stickyProject, isPlanningRoute, isForgeRoute]);
 
   // Context Contract v1.0: Detect if on system tab (forces Studios Platform)
@@ -307,7 +307,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     if (isPassive) return;
 
     // Only save work modes (support/project) - never forge/planning
-    if (resolvedMode === 'support' || resolvedMode === 'project') {
+    if (resolvedMode === 'support' || resolvedMode === 'worklog') {
       workContextRef.current = {
         mode: resolvedMode,
         project: effectiveProject,
@@ -317,7 +317,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
 
   // Track previous work mode (PROJECT or SUPPORT) when switching to Forge/Planning
   useEffect(() => {
-    if (context && (context.mode === 'project' || context.mode === 'support')) {
+    if (context && (context.mode === 'worklog' || context.mode === 'support')) {
       setPreviousWorkMode({
         mode: context.mode,
         projectId: context.project_id || undefined,
@@ -346,7 +346,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
       if (data.success) {
         setContextState(data.context);
         // Also set previousWorkMode if loaded context is project/support
-        if (data.context && (data.context.mode === 'project' || data.context.mode === 'support')) {
+        if (data.context && (data.context.mode === 'worklog' || data.context.mode === 'support')) {
           setPreviousWorkMode({
             mode: data.context.mode,
             projectId: data.context.project_id || undefined,
@@ -426,7 +426,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     // ENTERING Forge/Planning from non-forced route
     if (isForced && !wasForced && prevPath !== null) {
       const currentProject = stickyProject;
-      const currentMode = currentProject ? 'project' : 'support';
+      const currentMode = currentProject ? 'worklog' : 'support';
 
       savedWorkContextRef.current = {
         mode: currentMode,
@@ -547,7 +547,7 @@ export function UserContextProvider({ children }: { children: ReactNode }) {
     }
 
     // If already in PROJECT or SUPPORT, no flip needed - stay in current mode
-    if (context.mode === 'project' || context.mode === 'support') {
+    if (context.mode === 'worklog' || context.mode === 'support') {
       console.log('[flipToSupportIfNeeded] Already in project/support, no flip needed');
       return true;
     }
@@ -778,8 +778,9 @@ export function useUserContext() {
 }
 
 // Mode display helpers
+// UI shows "Project" but wire sends 'worklog'
 export const MODE_LABELS: Record<ContextMode, string> = {
-  project: 'Project',
+  worklog: 'Project',
   forge: 'Forge',
   support: 'Support',
   planning: 'Planning',
