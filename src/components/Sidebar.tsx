@@ -11,6 +11,7 @@ import OperationsDetailPanel from '@/app/operations/components/OperationsDetailP
 import { StudioService } from '@/app/operations/config';
 import { ProductionStatusContext } from '@/app/layout';
 import { useUserContext } from '@/app/contexts/UserContextProvider';
+import AttentionDrawer from './AttentionDrawer';
 
 // Mock current user - TODO: Get from auth context
 const currentUser = {
@@ -75,6 +76,31 @@ export default function Sidebar() {
   // Operations detail panel state
   const [selectedOpsService, setSelectedOpsService] = useState<StudioService | null>(null);
   const [showOpsDetailPanel, setShowOpsDetailPanel] = useState(false);
+
+  // Attention level for Git/Database button (from unified attention API)
+  const [attentionLevel, setAttentionLevel] = useState<'none' | 'warn' | 'urgent'>('none');
+  const [showAttentionDrawer, setShowAttentionDrawer] = useState(false);
+
+  // Fetch attention level periodically
+  useEffect(() => {
+    const fetchAttention = async () => {
+      try {
+        const res = await fetch('/operations/api/attention');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.attention?.overall) {
+            setAttentionLevel(data.attention.overall);
+          }
+        }
+      } catch {
+        // Silently fail - don't break sidebar if API is down
+      }
+    };
+
+    fetchAttention();
+    const interval = setInterval(fetchAttention, 30000); // Every 30s
+    return () => clearInterval(interval);
+  }, []);
 
   // Auto-collapse servers on calendar page, auto-expand on other pages
   useEffect(() => {
@@ -292,17 +318,43 @@ export default function Sidebar() {
             <span>💻</span>
             <span>Terminal</span>
           </button>
-          <button
-            onClick={() => handleWorkTabClick('/git-database')}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              pathname?.startsWith('/git-database')
-                ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
-            }`}
-          >
-            <span>🧬</span>
-            <span>Git / Database</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                if (attentionLevel !== 'none') {
+                  setShowAttentionDrawer(true);
+                } else {
+                  handleWorkTabClick('/git-database');
+                }
+              }}
+              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname?.startsWith('/git-database')
+                  ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                  : attentionLevel === 'urgent'
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  : attentionLevel === 'warn'
+                  ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              <span>🧬</span>
+              <span>Git / Database</span>
+              {attentionLevel !== 'none' && (
+                <span className={`w-2 h-2 rounded-full ${attentionLevel === 'urgent' ? 'bg-red-500' : 'bg-yellow-500'}`}></span>
+              )}
+            </button>
+            {attentionLevel !== 'none' && (
+              <button
+                onClick={() => handleWorkTabClick('/git-database')}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                title="Go to Git/Database page"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         )}
 
@@ -620,6 +672,12 @@ export default function Sidebar() {
           onClose={handleCloseOpsDetailPanel}
         />
       )}
+
+      {/* Attention Drawer */}
+      <AttentionDrawer
+        isOpen={showAttentionDrawer}
+        onClose={() => setShowAttentionDrawer(false)}
+      />
     </>
   );
 }

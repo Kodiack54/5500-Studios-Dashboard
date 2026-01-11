@@ -67,10 +67,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Find active context (ended_at IS NULL)
+    // Find active context using normalized pc_tag
     const result = await db.query<UserContext>(
       `SELECT * FROM dev_user_context
-       WHERE user_id = $1 AND pc_tag = $2 AND ended_at IS NULL
+       WHERE user_id = $1 AND pc_tag_norm = normalize_pc_tag($2) AND ended_at IS NULL
        ORDER BY started_at DESC LIMIT 1`,
       [userId, pcTag]
     );
@@ -146,60 +146,42 @@ export async function POST(request: NextRequest) {
     }
     // Note: non-project modes CAN have project_id (effective project stays)
 
-    // Heartbeats are append-only - don't modify previous contexts
-    // Flips use debounce logic to clean up short contexts
-    if (event_type === 'flip') {
-      // DEBOUNCE: Minimum 2-minute duration for context flips
-      // If previous context was < 2 min, DELETE it (noise reduction)
-      const MIN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
-
-      // 1. Get current active context to check its duration
-      const currentResult = await db.query<UserContext>(
-        `SELECT * FROM dev_user_context
-         WHERE user_id = $1 AND pc_tag = $2 AND ended_at IS NULL
-         ORDER BY started_at DESC LIMIT 1`,
-        [user_id, pc_tag]
-      );
-
-      const currentRows = Array.isArray(currentResult.data) ? currentResult.data : [];
-      const currentContext = currentRows[0];
-
-      if (currentContext) {
-        const duration = Date.now() - new Date(currentContext.started_at).getTime();
-
-        if (duration < MIN_DURATION_MS) {
-          // Context was too short - DELETE it (it's noise)
-          await db.query(
-            `DELETE FROM dev_user_context WHERE id = $1`,
-            [currentContext.id]
-          );
-          console.log(`[Context API] Deleted short context (${Math.round(duration/1000)}s): ${currentContext.mode}`);
-        } else {
-          // Context was long enough - end it normally
-          await db.query(
-            `UPDATE dev_user_context
-             SET ended_at = NOW(), updated_at = NOW()
-             WHERE id = $1`,
-            [currentContext.id]
-          );
-        }
-      }
-    }
-    // For heartbeats: Just append, Chad uses latest event <= session_time
-
-    // 2. Create new context (append-only for heartbeat support)
+    // ATOMIC context flip using CTE
+    // Ensures only one open segment per (user_id, pc_tag_norm) at any time
+    // Debounce: contexts < 2 min are deleted (noise), otherwise ended
+    // $10 = event_type ('flip' or 'heartbeat')
     const insertResult = await db.query<UserContext>(
-      `INSERT INTO dev_user_context
-       (user_id, pc_tag, pc_tag_raw, mode, project_id, project_slug, project_name, dev_team, source, event_type, meta)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING *`,
+      `WITH
+        current_ctx AS (
+          SELECT id, started_at,
+            EXTRACT(EPOCH FROM (NOW() - started_at)) as duration_secs
+          FROM dev_user_context
+          WHERE user_id = $1 AND pc_tag_norm = normalize_pc_tag($2) AND ended_at IS NULL
+          ORDER BY started_at DESC LIMIT 1
+        ),
+        deleted_short AS (
+          DELETE FROM dev_user_context
+          WHERE $10 = 'flip' AND id = (SELECT id FROM current_ctx WHERE duration_secs < 120)
+          RETURNING id
+        ),
+        closed_long AS (
+          UPDATE dev_user_context
+          SET ended_at = NOW(), updated_at = NOW()
+          WHERE $10 = 'flip' AND id = (SELECT id FROM current_ctx WHERE duration_secs >= 120)
+            AND id NOT IN (SELECT id FROM deleted_short)
+          RETURNING id
+        )
+      INSERT INTO dev_user_context
+        (user_id, pc_tag, pc_tag_norm, pc_tag_raw, mode, project_id, project_slug, project_name, dev_team, source, event_type, meta)
+      VALUES ($1, $2, normalize_pc_tag($2), $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *`,
       [
         user_id,
         pc_tag,
-        pc_tag_raw || 'dashboard',  // Default to 'dashboard' if not specified
+        pc_tag_raw || 'dashboard',
         mode,
-        project_id || null,        // Context Contract: project is sticky for ALL modes
-        project_slug || null,      // planning/support/forge all track effective project
+        project_id || null,
+        project_slug || null,
         project_name || null,
         dev_team || null,
         source,
@@ -280,11 +262,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // End active context
+    // End active context using normalized pc_tag
     const result = await db.query<UserContext>(
       `UPDATE dev_user_context
        SET ended_at = NOW(), updated_at = NOW()
-       WHERE user_id = $1 AND pc_tag = $2 AND ended_at IS NULL
+       WHERE user_id = $1 AND pc_tag_norm = normalize_pc_tag($2) AND ended_at IS NULL
        RETURNING *`,
       [userId, pcTag]
     );
