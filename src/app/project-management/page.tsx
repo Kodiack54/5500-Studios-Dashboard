@@ -39,6 +39,7 @@ import ConventionsTab from './tabs/ConventionsTab';
 import NotepadTab from './tabs/NotepadTab';
 import BugsTab from './tabs/BugsTab';
 import KnowledgeTab from './tabs/KnowledgeTab';
+import WorklogsTab from './tabs/WorklogsTab';
 
 // Wrapper component to handle Suspense for useSearchParams
 export default function ProjectManagementPage() {
@@ -251,6 +252,8 @@ function ProjectManagementContent() {
         return <NotepadTab projectPath={projectPath} projectId={selectedProject.id} projectName={selectedProject.name} isParent={isParent} childProjectIds={childProjectIds} />;
       case 'bugs':
         return <BugsTab projectPath={projectPath} projectId={selectedProject.id} projectName={selectedProject.name} isParent={isParent} childProjectIds={childProjectIds} />;
+      case 'worklogs':
+        return <WorklogsTab projectPath={projectPath} projectId={selectedProject.id} projectName={selectedProject.name} isParent={isParent} childProjectIds={childProjectIds} />;
       default:
         return null;
     }
