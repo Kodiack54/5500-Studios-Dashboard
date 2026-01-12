@@ -110,7 +110,8 @@ function calculateRollupStats(worklogs: any[]) {
     }
     byProject[w.project_id].count++;
     byProject[w.project_id].messages += w.message_count || 0;
-    if (!byProject[w.project_id].lastActivity || w.window_start > byProject[w.project_id].lastActivity) {
+    const projLastActivity = byProject[w.project_id].lastActivity;
+    if (!projLastActivity || w.window_start > projLastActivity) {
       byProject[w.project_id].lastActivity = w.window_start;
     }
 
