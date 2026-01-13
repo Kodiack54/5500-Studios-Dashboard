@@ -1,26 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-interface Worklog {
+interface WorklogBlock {
   id: string;
-  ts_id: string;
-  mode: string;
-  title: string | null;
-  briefing: string | null;
-  clean_text: string | null;
-  segment_start: string;
-  segment_end: string;
-  window_start: string | null;
-  window_end: string | null;
-  duration_hours: number;
-  status: string;
+  user_id: string;
+  pc_tag: string;
+  mode: string; // internal/external
+  lane: string; // worklog/forge/planning
+  project_id: string | null;
+  project_slug: string | null;
+  window_start: string;
+  window_end: string;
+  session_ids: string[] | null;
+  message_count: number;
+  raw_text: string | null;
+  clean_text_worklog: string | null;
+  cleaned_at: string | null;
+  clean_version: number;
   created_at: string;
-  parent_project_id: string | null;
-  metadata: { session_count?: number } | null;
 }
 
 /**
- * GET /session-logs/api/[tsId] - Get single worklog by TS ID
+ * GET /session-logs/api/[tsId] - Get single worklog block by ID
+ * tsId can be:
+ *   - WB-xxxxxxxx (generated ts_id from list API)
+ *   - full UUID (direct block_id)
  */
 export async function GET(
   request: NextRequest,
@@ -29,66 +33,100 @@ export async function GET(
   try {
     const { tsId } = await params;
 
-    const { data, error } = await db.from('dev_ai_worklogs')
+    // Handle WB-prefixed IDs (first 8 chars of UUID)
+    // or direct UUID lookups
+    let blockId = tsId;
+    if (tsId.startsWith('WB-')) {
+      // Search by partial ID match
+      const partialId = tsId.replace('WB-', '');
+      const { data: blocks } = await db.from('dev_worklog_blocks')
+        .select('id')
+        .ilike('id', `${partialId}%`)
+        .limit(1);
+
+      if (blocks && blocks.length > 0) {
+        blockId = (blocks[0] as { id: string }).id;
+      }
+    }
+
+    const { data, error } = await db.from('dev_worklog_blocks')
       .select('*')
-      .eq('ts_id', tsId)
+      .eq('id', blockId)
       .single();
 
     if (error || !data) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Worklog not found' 
+      return NextResponse.json({
+        success: false,
+        error: 'Worklog block not found'
       }, { status: 404 });
     }
 
-    const worklog = data as unknown as Worklog;
+    const block = data as unknown as WorklogBlock;
 
     // Get project info
-    let projectSlug = null;
     let projectName = null;
-    
-    if (worklog.parent_project_id) {
+    if (block.project_id) {
       const { data: project } = await db.from('dev_projects')
         .select('slug, name')
-        .eq('id', worklog.parent_project_id)
+        .eq('id', block.project_id)
         .single();
       if (project) {
         const proj = project as { slug: string; name: string };
-        projectSlug = proj.slug;
         projectName = proj.name;
       }
     }
 
-    // Get associated sessions
-    const { data: sessions } = await db.from('dev_ai_sessions')
-      .select('id, started_at, ended_at, message_count, status')
-      .eq('worklog_id', worklog.id)
-      .order('started_at', { ascending: true });
+    // Get associated session logs
+    const sessionIds = block.session_ids || [];
+    let sessions: Array<{ id: string; segment_start: string; segment_end: string; message_count: number; status: string }> = [];
+
+    if (sessionIds.length > 0) {
+      const { data: sessionData } = await db.from('dev_session_logs')
+        .select('id, segment_start, segment_end, message_count, status')
+        .in('id', sessionIds)
+        .order('segment_start', { ascending: true });
+
+      sessions = (sessionData || []) as typeof sessions;
+    }
+
+    // Calculate duration from window times
+    const windowStart = new Date(block.window_start);
+    const windowEnd = new Date(block.window_end);
+    const durationHours = (windowEnd.getTime() - windowStart.getTime()) / (1000 * 60 * 60);
+
+    // Generate ts_id for consistency
+    const generatedTsId = `WB-${block.id.slice(0, 8)}`;
 
     return NextResponse.json({
       success: true,
       worklog: {
-        ts_id: worklog.ts_id,
-        mode: worklog.mode,
-        title: worklog.title,
-        briefing: worklog.briefing,
-        clean_text: worklog.clean_text,
-        segment_start: worklog.segment_start,
-        segment_end: worklog.segment_end,
-        window_start: worklog.window_start,
-        window_end: worklog.window_end,
-        duration_hours: worklog.duration_hours,
-        status: worklog.status,
-        created_at: worklog.created_at,
-        project_slug: projectSlug,
+        ts_id: generatedTsId,
+        block_id: block.id,
+        mode: block.lane || block.mode, // lane is worklog/forge/planning (what UI calls "mode")
+        source_type: block.mode, // mode is internal/external
+        title: `${block.lane || 'Worklog'} - ${block.pc_tag}`,
+        briefing: `${sessionIds.length} session${sessionIds.length !== 1 ? 's' : ''} aggregated from ${block.pc_tag}`,
+        clean_text: block.clean_text_worklog, // Susan's cleaned transcript
+        raw_text: block.raw_text, // Raw content if needed
+        segment_start: block.window_start,
+        segment_end: block.window_end,
+        window_start: block.window_start,
+        window_end: block.window_end,
+        duration_hours: durationHours,
+        status: block.cleaned_at ? 'cleaned' : 'pending',
+        cleaned_at: block.cleaned_at,
+        clean_version: block.clean_version,
+        created_at: block.created_at,
+        project_slug: block.project_slug,
         project_name: projectName,
-        session_count: worklog.metadata?.session_count || 0,
-        sessions: sessions || []
+        session_count: sessionIds.length,
+        message_count: block.message_count,
+        sessions
       }
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Worklog detail API error:', message);
+    console.error('Worklog block detail API error:', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

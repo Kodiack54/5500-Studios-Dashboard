@@ -9,6 +9,12 @@ interface Session {
   user_name?: string;
   started_at?: string;
   ended_at?: string;
+  // Window times (Chad tick boundaries)
+  window_start?: string;
+  window_end?: string;
+  // Segment times (actual message range)
+  segment_start?: string;
+  segment_end?: string;
   terminal_port?: number;
   status?: string;
   source_type?: string;
@@ -21,16 +27,22 @@ interface Session {
 
 interface Worklog {
   ts_id: string;
+  block_id?: string;
   mode: string;
+  source_type?: string;
   briefing: string;
   segment_start: string;
   segment_end: string;
+  window_start?: string;
+  window_end?: string;
   duration_hours: number;
   status: string;
   project_slug: string | null;
   project_name: string | null;
   session_count: number;
+  message_count?: number;
   created_at: string;
+  cleaned_at?: string;
 }
 
 interface Project {
@@ -444,12 +456,20 @@ function WorklogCard({ worklog, onClick }: { worklog: Worklog; onClick: () => vo
   const duration = formatDuration(worklog.duration_hours);
 
   const modeColors: Record<string, string> = {
+    worklog: 'bg-blue-600',
     project: 'bg-blue-600',
     forge: 'bg-purple-600',
     support: 'bg-green-600',
     planning: 'bg-yellow-600',
     other: 'bg-gray-600',
   };
+
+  const sourceColors: Record<string, { bg: string; text: string }> = {
+    internal: { bg: 'bg-blue-600', text: 'INT' },
+    external: { bg: 'bg-teal-600', text: 'EXT' },
+  };
+
+  const source = worklog.source_type ? sourceColors[worklog.source_type] : null;
 
   return (
     <div
@@ -458,29 +478,47 @@ function WorklogCard({ worklog, onClick }: { worklog: Worklog; onClick: () => vo
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          {/* Header: TS ID + Project + Mode */}
+          {/* Header: TS ID + Source + Project + Mode */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono font-bold text-white">{worklog.ts_id}</span>
+            {source && (
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${source.bg}`}>
+                {source.text}
+              </span>
+            )}
             {(worklog.project_name || worklog.project_slug) && (
               <span className="text-sm text-gray-400">{worklog.project_name || worklog.project_slug}</span>
             )}
             <span className={`px-2 py-0.5 rounded text-xs text-white ${modeColors[worklog.mode?.toLowerCase()] || modeColors.other}`}>
-              {worklog.mode || 'Other'}
+              {worklog.mode || 'worklog'}
             </span>
           </div>
 
-          {/* Time + Duration */}
+          {/* Time + Duration + Counts */}
           <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
             <span>{timeRange}</span>
             <span>•</span>
             <span>{duration}</span>
-            {worklog.session_count > 1 && (
+            {worklog.message_count && (
               <>
                 <span>•</span>
-                <span>{worklog.session_count} sessions</span>
+                <span>{worklog.message_count} msgs</span>
+              </>
+            )}
+            {worklog.session_count > 0 && (
+              <>
+                <span>•</span>
+                <span>{worklog.session_count} session{worklog.session_count !== 1 ? 's' : ''}</span>
               </>
             )}
           </div>
+
+          {/* Status badge for cleaned blocks */}
+          {worklog.status === 'cleaned' && (
+            <div className="mt-1">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-600/20 text-green-400">cleaned</span>
+            </div>
+          )}
 
           {/* Briefing */}
           <p className="mt-2 text-sm text-gray-300 line-clamp-2">

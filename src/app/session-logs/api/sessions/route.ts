@@ -34,8 +34,14 @@ export async function GET(request: NextRequest) {
       const portMatch = pcTag?.match(/dev(\d)-(\d+)/);
       return {
         id: row.id,
-        started_at: row.segment_start || row.first_ts,
+        // Use window_end as the canonical session timestamp (Chad's tick time)
+        started_at: row.window_end || row.segment_start || row.first_ts,
         ended_at: row.segment_end || row.last_ts,
+        // Keep segment times for detail view
+        window_start: row.window_start,
+        window_end: row.window_end,
+        segment_start: row.segment_start,
+        segment_end: row.segment_end,
         message_count: row.message_count || row.raw_count,
         // Map mode to source_type for UI compatibility
         source_type: row.mode === 'external' ? 'external_claude' : row.mode === 'internal' ? 'internal_claude' : row.mode,
