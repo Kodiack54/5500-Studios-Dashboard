@@ -29,24 +29,28 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform to match UI expected format
-    const sessions = (Array.isArray(data) ? data : []).map(row => ({
-      id: row.id,
-      started_at: row.segment_start || row.first_ts,
-      ended_at: row.segment_end || row.last_ts,
-      message_count: row.message_count || row.raw_count,
-      // Map mode to source_type for UI compatibility
-      source_type: row.mode === 'external' ? 'external_claude' : row.mode === 'internal' ? 'internal_claude' : row.mode,
-      source_name: row.pc_tag,
-      terminal_port: row.pc_tag?.match(/dev(\d)-(\d+)/)?.[2] || null,
-      status: row.status,
-      processed_by: row.processed_by,
-      processed_at: row.processed_at,
-      mode: row.lane || row.mode,
-      project_id: row.project_id,
-      project_slug: row.project_slug,
-      pc_tag: row.pc_tag,
-      created_at: row.created_at,
-    }));
+    const sessions = (Array.isArray(data) ? data : []).map((row: Record<string, unknown>) => {
+      const pcTag = row.pc_tag as string | null;
+      const portMatch = pcTag?.match(/dev(\d)-(\d+)/);
+      return {
+        id: row.id,
+        started_at: row.segment_start || row.first_ts,
+        ended_at: row.segment_end || row.last_ts,
+        message_count: row.message_count || row.raw_count,
+        // Map mode to source_type for UI compatibility
+        source_type: row.mode === 'external' ? 'external_claude' : row.mode === 'internal' ? 'internal_claude' : row.mode,
+        source_name: pcTag,
+        terminal_port: portMatch?.[2] || null,
+        status: row.status,
+        processed_by: row.processed_by,
+        processed_at: row.processed_at,
+        mode: row.lane || row.mode,
+        project_id: row.project_id,
+        project_slug: row.project_slug,
+        pc_tag: pcTag,
+        created_at: row.created_at,
+      };
+    });
 
     return NextResponse.json({
       success: true,
